@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>HSE Monitor</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1a3a5c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- ══ KEAMANAN: Content-Security-Policy (destination control) ══
+     Hanya izinkan koneksi/skrip/gambar dari domain yang ditentukan di bawah.
+     PENTING: Jika Anda menambah CDN/layanan baru, tambahkan domainnya di sini juga,
+     atau resource baru tersebut akan diblokir browser. ══ -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' https://cdnjs.cloudflare.com;
+  style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+  font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;
+  img-src 'self' data: blob: https://*.arcgisonline.com https://*.tile.openstreetmap.org https://server.arcgisonline.com;
+  connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.arcgisonline.com https://*.tile.openstreetmap.org;
+  object-src 'none';
+  base-uri 'self';
+  manifest-src 'self';
+  worker-src 'self';
+">
+<!-- Cache-Control via meta: best-effort, sebagian browser/proxy mengabaikan ini.
+     GitHub Pages sendiri otomatis menerapkan Cache-Control: max-age=600 + ETag
+     pada level HTTP response — itulah kontrol cache sesungguhnya yang aktif. -->
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" rel="stylesheet">
+<style>
+:root{
+  --navy:#1a3a5c;--navy-d:#0f2540;--navy-l:#2a5080;
+  --orange:#e8821a;--orange-l:#f5a054;
+  --red:#dc3545;--yellow:#ffc107;--green:#28a745;
+  --blue:#3498db;--purple:#8e44ad;--teal:#17a589;
+  --bg:#eef1f6;--sw:250px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:#2d3748;overflow-x:hidden;}
+h1,h2,h3,h4,h5,h6,.brand{font-family:'Rajdhani',sans-serif;}
+
+/* ══ SCAN PAGE ══ */
+#scan-page{display:none;min-height:100vh;background:var(--navy-d);}
+.scan-header{background:var(--navy);padding:16px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+.scan-header i{color:var(--orange);font-size:1.5rem;}
+.scan-header h4{color:#fff;margin:0;font-size:1.2rem;}
+.scan-header small{color:rgba(255,255,255,.6);font-size:.72rem;display:block;}
+.scan-body{padding:16px;max-width:580px;margin:0 auto;padding-bottom:40px;}
+.scan-card{background:#fff;border-radius:12px;padding:20px;margin-bottom:14px;box-shadow:0 4px 20px rgba(0,0,0,.2);}
+.scan-card h5{font-family:'Rajdhani',sans-serif;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:1.1rem;}
+.id-badge{display:inline-flex;align-items:center;gap:6px;background:var(--navy);color:#fff;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:600;margin-bottom:12px;}
+.info-row{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f0f0f0;}
+.info-row:last-child{border:none;}
+.info-label{font-size:.8rem;color:#6c757d;font-weight:600;flex-shrink:0;margin-right:12px;}
+.info-val{font-size:.88rem;font-weight:600;color:#2d3748;text-align:right;}
+.status-chip{padding:4px 12px;border-radius:20px;font-size:.78rem;font-weight:700;display:inline-block;}
+.status-ok{background:#d4edda;color:#155724}.status-exp{background:#f8d7da;color:#721c24}.status-near{background:#fff3cd;color:#856404}
+/* Checklist scan — tombol besar untuk layar kecil */
+.ck-scan{background:#f8f9fa;border-radius:10px;padding:14px;margin-bottom:10px;border:2px solid #dee2e6;transition:border-color .2s;}
+.ck-scan.ck-ng{border-color:var(--red);background:#fff5f5;}
+.ck-scan.ck-ok{border-color:var(--green);background:#f5fff5;}
+.ck-scan.ck-na{border-color:#adb5bd;background:#f8f9fa;}
+.ck-scan-label{font-size:.88rem;font-weight:500;margin-bottom:10px;color:#2d3748;line-height:1.4;}
+.ck-btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.ck-btn{padding:10px 4px;border-radius:8px;border:2px solid #dee2e6;background:#fff;cursor:pointer;font-size:.82rem;font-weight:700;text-align:center;transition:.15s;user-select:none;}
+.ck-btn:active{transform:scale(.97);}
+.ck-btn.sel-ok{border-color:#28a745;background:#28a745;color:#fff;}
+.ck-btn.sel-ng{border-color:#dc3545;background:#dc3545;color:#fff;}
+.ck-btn.sel-na{border-color:#6c757d;background:#6c757d;color:#fff;}
+.ck-note{width:100%;margin-top:8px;font-size:.8rem;border:1px solid #dee2e6;border-radius:6px;padding:6px 10px;}
+.ck-note:focus{border-color:var(--navy);outline:none;}
+.last-insp-box{background:#e8f4ff;border:1px solid #b8daff;border-radius:8px;padding:12px;margin-bottom:14px;font-size:.82rem;color:#004085;}
+/* Summary inspeksi terakhir */
+.prev-cl-row{display:flex;justify-content:space-between;padding:3px 0;font-size:.78rem;}
+.prev-cl-val{font-weight:700;}
+.prev-ok{color:var(--green)}.prev-ng{color:var(--red)}.prev-na{color:#6c757d}
+/* Result */
+.scan-result{text-align:center;padding:36px 20px;}
+.scan-result .result-icon{font-size:4rem;margin-bottom:16px;display:block;}
+.scan-result h4{font-family:'Rajdhani',sans-serif;font-size:1.8rem;margin-bottom:8px;}
+.summary-box{background:#f8f9fa;border-radius:8px;padding:14px;text-align:left;font-size:.84rem;margin-top:12px;}
+
+/* ══ LOGIN ══ */
+#login-sc{position:fixed;inset:0;background:var(--navy-d);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.login-box{background:#fff;border-radius:16px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.login-logo{text-align:center;margin-bottom:28px;}
+.login-logo i{font-size:3rem;color:var(--orange);display:block;margin-bottom:8px;}
+.login-logo h2{font-size:1.8rem;font-weight:700;color:var(--navy);margin:0;}
+.login-logo small{color:#6c757d;font-size:.82rem;}
+.login-error{display:none;background:#f8d7da;color:#721c24;border-radius:8px;padding:10px 14px;font-size:.84rem;margin-bottom:14px;}
+.login-success{display:none;background:#d4edda;color:#155724;border-radius:8px;padding:10px 14px;font-size:.84rem;margin-bottom:14px;}
+
+/* ══ LOADING ══ */
+#loading-sc{position:fixed;inset:0;background:var(--navy-d);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;z-index:9998;}
+.spinner{width:46px;height:46px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--orange);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ══ SIDEBAR ══ */
+#sidebar{position:fixed;top:0;left:0;height:100vh;width:var(--sw);background:var(--navy-d);color:#fff;z-index:1000;display:flex;flex-direction:column;transition:.3s;}
+.brand{padding:16px 18px;font-size:1.25rem;font-weight:700;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:10px;}
+.brand i{color:var(--orange);font-size:1.4rem;}
+.brand small{display:block;font-size:.6rem;font-weight:400;opacity:.55;letter-spacing:1px;font-family:'DM Sans',sans-serif;}
+#sidebar nav{flex:1;padding:10px 0;overflow-y:auto;}
+.nav-sec{padding:8px 18px 4px;font-size:.65rem;font-weight:600;letter-spacing:2px;color:rgba(255,255,255,.35);text-transform:uppercase;}
+.nav-link{display:flex;align-items:center;gap:11px;padding:9px 18px;color:rgba(255,255,255,.65);text-decoration:none;font-size:.88rem;font-weight:500;border-left:3px solid transparent;transition:.15s;}
+.nav-link:hover{color:#fff;background:rgba(255,255,255,.06);}
+.nav-link.active{color:#fff;background:rgba(232,130,26,.15);border-left-color:var(--orange);}
+.nav-link i{width:18px;text-align:center;font-size:.95rem;}
+.sb-user{padding:12px 18px;border-top:1px solid rgba(255,255,255,.1);font-size:.8rem;}
+.sb-user .name{font-weight:600;color:#fff;}
+.sb-user .role{font-size:.7rem;opacity:.6;}
+.sb-logout{display:block;margin-top:8px;font-size:.75rem;color:rgba(255,165,0,.8);cursor:pointer;text-decoration:none;}
+.sb-logout:hover{color:var(--orange);}
+
+/* ══ MAIN ══ */
+#main{margin-left:var(--sw);transition:.3s;}
+#topbar{background:#fff;padding:10px 22px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,.07);position:sticky;top:0;z-index:900;}
+#topbar h5{font-size:1.15rem;font-weight:700;color:var(--navy);margin:0;}
+#content{padding:22px;}
+
+/* ══ STAT CARDS ══ */
+.sc{background:#fff;border-radius:10px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,.07);display:flex;align-items:center;gap:14px;border-top:4px solid transparent;}
+.sc.navy{border-color:var(--navy)}.sc.orange{border-color:var(--orange)}.sc.red{border-color:var(--red)}.sc.green{border-color:var(--green)}.sc.blue{border-color:var(--blue)}.sc.purple{border-color:var(--purple)}.sc.teal{border-color:var(--teal)}
+.sci{width:48px;height:48px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+.sc.navy .sci{background:rgba(26,58,92,.1);color:var(--navy)}.sc.orange .sci{background:rgba(232,130,26,.1);color:var(--orange)}.sc.red .sci{background:rgba(220,53,69,.1);color:var(--red)}.sc.green .sci{background:rgba(40,167,69,.1);color:var(--green)}.sc.blue .sci{background:rgba(52,152,219,.1);color:var(--blue)}.sc.purple .sci{background:rgba(142,68,173,.1);color:var(--purple)}.sc.teal .sci{background:rgba(23,165,137,.1);color:var(--teal)}
+.sv{font-size:1.9rem;font-weight:700;line-height:1;font-family:'Rajdhani',sans-serif;}
+.sl{font-size:.75rem;color:#6c757d;margin-top:2px;}
+
+/* ══ DATA TABLE ══ */
+.dt{background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden;}
+.dt-hdr{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eee;flex-wrap:wrap;gap:10px;}
+.dt-hdr h6{font-size:1.05rem;font-weight:700;margin:0;color:var(--navy);}
+.table{margin:0;}
+.table thead th{background:var(--navy);color:#fff;font-family:'Rajdhani',sans-serif;font-weight:600;border:none;padding:9px 13px;font-size:.87rem;}
+.table tbody td{padding:9px 13px;vertical-align:middle;font-size:.85rem;}
+.table tbody tr:hover{background:#f8f9ff;}
+.bs{padding:3px 9px;border-radius:20px;font-size:.72rem;font-weight:600;display:inline-block;}
+.bs-ok{background:#d4edda;color:#155724}.bs-exp{background:#f8d7da;color:#721c24}.bs-near{background:#fff3cd;color:#856404}.bs-low{background:#ffe0cc;color:#7a3500}.bs-pass{background:#d4edda;color:#155724}.bs-fix{background:#fff3cd;color:#856404}.bs-fail{background:#f8d7da;color:#721c24}
+.ai{background:#fff;border-radius:8px;padding:11px 14px;border-left:4px solid #ccc;margin-bottom:8px;display:flex;align-items:center;gap:11px;font-size:.83rem;}
+.ai.expired{border-color:var(--red)}.ai.near{border-color:var(--yellow)}.ai.low{border-color:var(--orange)}.ai.pass{border-color:var(--green)}.ai.fix{border-color:var(--yellow)}.ai.fail{border-color:var(--red)}
+
+/* ══ FORM MAP ══ */
+.form-map-wrap{border-radius:8px;overflow:hidden;border:2px solid #dee2e6;margin-bottom:10px;position:relative;transition:border-color .2s;}
+.form-map-hint{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:500;background:rgba(15,37,64,.82);color:#fff;font-size:.75rem;padding:4px 12px;border-radius:20px;white-space:nowrap;pointer-events:none;}
+.form-map-hint.has-coord{background:rgba(40,167,69,.88);}
+.fmap{width:100%;height:260px;cursor:crosshair;}
+.coord-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.coord-val{font-family:monospace;font-size:.8rem;background:#f0f3f7;border:1px solid #dee2e6;border-radius:6px;padding:4px 10px;color:var(--navy);font-weight:600;flex:1;min-width:130px;}
+.coord-val.has-val{background:#d4edda;border-color:#28a745;color:#155724;}
+.map-layer-btn{font-size:.72rem;padding:3px 9px;border-radius:5px;border:1px solid #dee2e6;background:#fff;cursor:pointer;color:#495057;}
+.map-layer-btn.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+/* ══ MAIN MAP ══ */
+#lmap{width:100%;height:560px;border-radius:10px 10px 0 0;z-index:1;}
+.map-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;padding:10px 16px;background:#fff;border-radius:0 0 10px 10px;border-top:1px solid #eee;}
+.ml-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;display:inline-block;}
+
+/* ══ FORMS ══ */
+.form-label{font-size:.8rem;font-weight:600;color:#495057;margin-bottom:3px;}
+.form-control,.form-select{font-size:.86rem;border-radius:7px;}
+.form-control:focus,.form-select:focus{border-color:var(--navy);box-shadow:0 0 0 .2rem rgba(26,58,92,.15);}
+.btn-navy{background:var(--navy);color:#fff;border:none;}.btn-navy:hover{background:var(--navy-l);color:#fff;}
+.btn-orange{background:var(--orange);color:#fff;border:none;}.btn-orange:hover{background:var(--orange-l);color:#fff;}
+.btn-xs{padding:2px 7px;font-size:.75rem;}
+.ck-item{background:#f8f9fa;border-radius:8px;padding:10px 14px;margin-bottom:7px;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;}
+.ck-label{flex:1;min-width:180px;font-size:.86rem;padding-top:4px;}
+.ck-opts{display:flex;gap:6px;flex-shrink:0;}
+.ck-opt{display:inline-flex;align-items:center;gap:4px;cursor:pointer;}
+.ck-opt label{font-size:.78rem;cursor:pointer;font-weight:600;}
+.ok-lbl{color:#28a745}.ng-lbl{color:#dc3545}.na-lbl{color:#6c757d}
+.type-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;}
+.type-tab{padding:6px 14px;border-radius:20px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid #dee2e6;background:#fff;color:#6c757d;transition:.15s;}
+.type-tab.active{border-color:var(--navy);background:var(--navy);color:#fff;}
+.type-tab:hover:not(.active){border-color:var(--navy);color:var(--navy);}
+
+/* ══ QR MODAL ══ */
+.qr-apar-info .field{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:.84rem;}
+.qr-apar-info .field:last-child{border:none;}
+.qr-url-box{font-size:.72rem;font-family:monospace;word-break:break-all;background:#f0f3f7;padding:8px 10px;border-radius:6px;margin-top:10px;color:#495057;}
+
+/* ══ MISC ══ */
+@media(max-width:768px){
+  #sidebar{transform:translateX(-100%);}#sidebar.open{transform:translateX(0);}
+  #main{margin-left:0;}
+  #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;}
+  #overlay.show{display:block;}
+  #content{padding:14px;}#lmap{height:360px;}.fmap{height:200px;}
+}
+.sec-title{font-family:'Rajdhani',sans-serif;font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.empty-st{text-align:center;padding:36px 20px;color:#adb5bd;}
+.empty-st i{font-size:2.5rem;margin-bottom:10px;display:block;}
+
+/* ══ PRINT ══ */
+@media print{
+  body *{visibility:hidden;}
+  #print-qr-area,#print-qr-area *{visibility:visible;}
+  #print-qr-area{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;}
+}
+/* ══ GPS AMBIL LOKASI ══ */
+.btn-gps{background:var(--blue);color:#fff;border:none;font-size:.75rem;padding:4px 10px;border-radius:6px;white-space:nowrap;transition:.15s;cursor:pointer;}
+.btn-gps:hover{background:#2980b9;color:#fff;}
+.btn-gps:disabled{opacity:.65;cursor:not-allowed;}
+.gps-accuracy-info{margin-top:6px;padding:5px 10px;border-radius:6px;font-size:.78rem;font-weight:600;display:none;align-items:center;gap:6px;}
+.gps-acc-good{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}
+.gps-acc-warn{background:#fff3cd;color:#856404;border:1px solid #ffeeba;}
+.gps-acc-bad{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+
+</style>
+</head>
+<body>
+
+<!-- GitHub Pages: baca parameter URL, data aset dimuat via fetch ke GAS API -->
+<script>
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  WAJIB DIISI: URL GAS Web App Anda setelah di-deploy        ║
+// ║  Contoh: https://script.google.com/macros/s/AKfy.../exec    ║
+// ╚══════════════════════════════════════════════════════════════╝
+/* === HSE-MONITOR v3.2 — GitHub Pages Build (Custom Domain + App Key) === */
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwb2NJLkMTUjrOR1Qaf1qhUfbZGkQo8yukJY60GJqTgQcqEktgZJbjOa9F1pmXAvRr2Jg/exec';
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  WAJIB DIISI: App Key — HARUS SAMA PERSIS dengan APP_KEY      ║
+// ║  di Code.gs. Ini adalah lapisan source-control sederhana.    ║
+// ║  Catatan: key ini terlihat di View Source — berfungsi sebagai║
+// ║  penghalang penyalahgunaan otomatis, bukan proteksi mutlak.  ║
+// ╚══════════════════════════════════════════════════════════════╝
+const APP_KEY = 'Ezkz1u4kQXrdw1d64AYoHFQbxa3OCSAC';
+
+// Baca parameter QR scan dari URL (menggantikan template injection GAS)
+const _urlP    = new URLSearchParams(location.search);
+const SCAN_MODE = _urlP.has('scan') ? 'true' : 'false';
+const _SCAN_TYPE = _urlP.get('scan') || '';   // 'apar' | 'p3k'
+const _SCAN_ID   = _urlP.get('id')   || '';
+let   SCAN_DATA  = null; // akan diisi async via api()
+
+// Helper fetch → GAS REST API
+async function api(action, payload) {
+  const token = sessionStorage.getItem('hse_token') || '';
+  const r = await fetch(GAS_URL, {
+    method : 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body   : JSON.stringify({ action, data: payload || {}, token, appKey: APP_KEY, ts: Date.now() }),
+    redirect: 'follow'
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const json = await r.json();
+  if (json && json._authError) { sessionStorage.removeItem('hse_token'); location.reload(); }
+  return json;
+}
+</script>
+
+<!-- ══ SCAN PAGE ══ -->
+<div id="scan-page">
+  <div class="scan-header">
+    <i class="fas fa-fire-extinguisher"></i>
+    <div><h4>Form Inspeksi APAR</h4><small>HSE Monitor — Inspeksi via QR Code</small></div>
+  </div>
+  <div class="scan-body" id="scan-body"></div>
+</div>
+
+<!-- ══ NORMAL APP ══ -->
+<div id="loading-sc">
+  <div class="spinner"></div>
+  <div style="font-family:'Rajdhani',sans-serif;font-size:1.2rem;letter-spacing:1px;">Memuat HSE Monitor…</div>
+</div>
+
+<div id="login-sc" style="display:none;">
+  <div class="login-box">
+    <div class="login-logo">
+      <i class="fas fa-shield-halved"></i><h2>HSE Monitor</h2><small>Fire Safety & P3K System</small>
+    </div>
+    <div class="login-error"  id="login-err"></div>
+    <div class="login-success" id="login-ok"></div>
+    <!-- Tab Login / Lupa Password -->
+    <ul class="nav nav-pills mb-3" id="auth-tabs" style="font-size:.82rem;">
+      <li class="nav-item"><a class="nav-link active px-3 py-1" href="#" onclick="showAuthTab('login',this);return false;">Login</a></li>
+      <li class="nav-item"><a class="nav-link px-3 py-1" href="#" onclick="showAuthTab('forgot',this);return false;">Lupa Password</a></li>
+    </ul>
+
+    <!-- Form Login -->
+    <div id="auth-login">
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-user" style="color:var(--navy)"></i></span>
+          <input type="text" class="form-control" id="login-user" placeholder="Username" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Password</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-lock" style="color:var(--navy)"></i></span>
+          <input type="password" class="form-control" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+          <button class="btn btn-outline-secondary" onclick="togglePV()"><i class="fas fa-eye" id="pass-eye"></i></button>
+        </div>
+      </div>
+      <button class="btn btn-navy w-100 py-2" id="login-btn" onclick="doLogin()">
+        <i class="fas fa-sign-in-alt me-2"></i>Masuk
+      </button>
+      <div class="text-center mt-3" style="font-size:.72rem;color:#adb5bd;">Login pertama: <b>admin</b> / <b>admin123</b></div>
+    </div>
+
+    <!-- Form Lupa Password -->
+    <div id="auth-forgot" style="display:none;">
+      <div class="alert alert-info py-2 mb-3" style="font-size:.82rem;">
+        <i class="fas fa-info-circle me-2"></i>Masukkan username Anda. Password sementara akan dikirim ke email yang terdaftar.
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Username</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-user" style="color:var(--navy)"></i></span>
+          <input type="text" class="form-control" id="forgot-user" placeholder="Username Anda" onkeydown="if(event.key==='Enter')doForgotPass()">
+        </div>
+      </div>
+      <button class="btn btn-navy w-100 py-2" id="forgot-btn" onclick="doForgotPass()">
+        <i class="fas fa-paper-plane me-2"></i>Kirim Password Sementara
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay" onclick="closeSb()"></div>
+<nav id="sidebar" style="display:none;">
+  <div class="brand"><i class="fas fa-shield-halved"></i><div><span>HSE Monitor</span><small>FIRE SAFETY & P3K SYSTEM</small></div></div>
+  <nav>
+    <div class="nav-sec">Overview</div>
+    <a href="#" class="nav-link active" onclick="gv('dashboard',this)"><i class="fas fa-gauge-high"></i>Dashboard</a>
+    <div class="nav-sec">Fire Safety</div>
+    <a href="#" class="nav-link" onclick="gv('apar',this)"><i class="fas fa-fire-extinguisher"></i>APAR</a>
+    <a href="#" class="nav-link" onclick="gv('equip',this)"><i class="fas fa-network-wired"></i>Peralatan</a>
+    <div class="nav-sec">Medis</div>
+    <a href="#" class="nav-link" onclick="gv('p3k',this)"><i class="fas fa-kit-medical"></i>Kotak P3K</a>
+    <div class="nav-sec">Kepatuhan</div>
+    <a href="#" class="nav-link" onclick="gv('inspeksi',this)"><i class="fas fa-clipboard-check"></i>Form Inspeksi</a>
+    <div class="nav-sec">Visualisasi</div>
+    <a href="#" class="nav-link" onclick="gv('map',this)"><i class="fas fa-satellite"></i>Peta Satelit</a>
+    <div class="nav-sec">Sistem</div>
+    <a href="#" class="nav-link admin-only" onclick="gv('admin',this)"><i class="fas fa-cog"></i>Admin</a>
+    <a href="#" class="nav-link" onclick="gv('profil',this)"><i class="fas fa-key"></i>Ganti Password</a>
+  </nav>
+  <div class="sb-user">
+    <div class="name" id="sb-nama">—</div><div class="role" id="sb-role">—</div>
+    <a href="#" class="sb-logout" onclick="doLogout()"><i class="fas fa-sign-out-alt me-1"></i>Logout</a>
+  </div>
+</nav>
+
+<div id="main" style="display:none;">
+  <div id="topbar">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm d-md-none me-1" onclick="openSb()" style="border:none;"><i class="fas fa-bars fa-lg" style="color:var(--navy)"></i></button>
+      <h5 id="topbar-title">Dashboard</h5>
+    </div>
+    <span id="topbar-user" class="badge" style="background:var(--navy);font-size:.72rem;"></span>
+  </div>
+  <div id="content">
+
+  <!-- DASHBOARD -->
+  <div id="view-dashboard">
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3"><div class="sc navy"><div class="sci"><i class="fas fa-fire-extinguisher"></i></div><div><div class="sv" id="d-apar-t">0</div><div class="sl">Total APAR</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc red"><div class="sci"><i class="fas fa-triangle-exclamation"></i></div><div><div class="sv" id="d-apar-e">0</div><div class="sl">APAR Alert</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc teal"><div class="sci"><i class="fas fa-network-wired"></i></div><div><div class="sv" id="d-eq-t">0</div><div class="sl">Total Peralatan</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc red"><div class="sci"><i class="fas fa-bell-slash"></i></div><div><div class="sv" id="d-eq-e">0</div><div class="sl">Peralatan Alert</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc blue"><div class="sci"><i class="fas fa-kit-medical"></i></div><div><div class="sv" id="d-p3k-l">0</div><div class="sl">Lokasi P3K</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc red"><div class="sci"><i class="fas fa-calendar-xmark"></i></div><div><div class="sv" id="d-p3k-e">0</div><div class="sl">Item Expired</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc orange"><div class="sci"><i class="fas fa-battery-empty"></i></div><div><div class="sv" id="d-p3k-s">0</div><div class="sl">Stok Habis</div></div></div></div>
+      <div class="col-6 col-md-3"><div class="sc purple"><div class="sci"><i class="fas fa-clipboard-check"></i></div><div><div class="sv" id="d-ins-t">0</div><div class="sl">Total Inspeksi</div></div></div></div>
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-7"><div class="dt"><div class="dt-hdr"><h6><i class="fas fa-bell text-danger me-2"></i>Alert Aktif</h6><span id="d-alert-cnt" class="badge bg-danger">0</span></div>
+        <div style="padding:14px;max-height:360px;overflow-y:auto;" id="d-alerts"><div class="empty-st"><i class="fas fa-spinner fa-spin text-muted"></i><br>Memuat…</div></div>
+      </div></div>
+      <div class="col-lg-5">
+        <div class="dt mb-3"><div class="dt-hdr"><h6><i class="fas fa-clock-rotate-left me-2" style="color:var(--purple)"></i>Inspeksi Terbaru</h6></div>
+          <div style="padding:14px;max-height:170px;overflow-y:auto;" id="d-insp"></div></div>
+        <div class="dt"><div class="dt-hdr"><h6><i class="fas fa-history me-2" style="color:var(--blue)"></i>Pemakaian P3K (7hr)</h6></div>
+          <div style="padding:14px;max-height:170px;overflow-y:auto;" id="d-usage"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APAR -->
+  <div id="view-apar" style="display:none;">
+    <div class="dt"><div class="dt-hdr"><h6><i class="fas fa-fire-extinguisher me-2" style="color:var(--orange)"></i>Data APAR</h6>
+      <div class="d-flex gap-2 flex-wrap">
+        <input type="text" class="form-control form-control-sm" id="apar-search" placeholder="🔍 Cari…" oninput="filterApar()" style="width:150px;">
+        <button class="btn btn-sm btn-orange" onclick="openAparModal()"><i class="fas fa-plus me-1"></i>Tambah</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;"><table class="table table-hover"><thead><tr><th>ID</th><th>Jenis</th><th>Brand</th><th>Kapasitas</th><th>Lokasi</th><th>Tgl Isi</th><th>Expired</th><th>Status</th><th>QR</th><th>Aksi</th></tr></thead><tbody id="apar-tbody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- EQUIPMENT -->
+  <div id="view-equip" style="display:none;">
+    <div class="type-tabs" id="equip-tabs"><div class="type-tab active" onclick="filterEquip('',this)">Semua</div></div>
+    <div class="dt"><div class="dt-hdr"><h6><i class="fas fa-network-wired me-2" style="color:var(--teal)"></i>Peralatan Fire Safety</h6>
+      <button class="btn btn-sm btn-navy" onclick="openEquipModal()"><i class="fas fa-plus me-1"></i>Tambah</button>
+    </div>
+    <div style="overflow-x:auto;"><table class="table table-hover"><thead><tr><th>ID</th><th>Tipe</th><th>Nama</th><th>Lokasi</th><th>Tgl Pasang</th><th>Expired</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="equip-tbody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- P3K -->
+  <div id="view-p3k" style="display:none;">
+    <div class="row g-3">
+      <div class="col-md-4"><div class="dt h-100"><div class="dt-hdr"><h6><i class="fas fa-map-pin me-2" style="color:var(--blue)"></i>Lokasi P3K</h6>
+        <button class="btn btn-sm btn-navy" onclick="openP3kLokModal()"><i class="fas fa-plus"></i></button></div>
+        <div id="p3k-lok-list" style="padding:12px;max-height:540px;overflow-y:auto;"></div>
+      </div></div>
+      <div class="col-md-8"><div class="dt"><div class="dt-hdr">
+        <h6 id="p3k-det-title"><i class="fas fa-pills me-2" style="color:var(--green)"></i>Pilih Lokasi P3K</h6>
+        <div id="p3k-item-acts" style="display:none;">
+          <button class="btn btn-sm btn-orange me-2" onclick="openPemModal()"><i class="fas fa-minus-circle me-1"></i>Catat Pemakaian</button>
+          <button class="btn btn-sm btn-navy" onclick="openP3kItemModal()"><i class="fas fa-plus me-1"></i>Item</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;"><table class="table table-hover"><thead><tr><th>Item</th><th>Satuan</th><th>Stok</th><th>Expired</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="p3k-item-tbody"></tbody></table></div>
+      <div id="pem-section" style="display:none;padding:12px 16px;border-top:1px solid #eee;">
+        <div class="sec-title"><i class="fas fa-history"></i>Log Pemakaian</div>
+        <div id="pem-log" style="max-height:180px;overflow-y:auto;"></div>
+      </div></div></div>
+    </div>
+  </div>
+
+  <!-- INSPEKSI -->
+  <div id="view-inspeksi" style="display:none;">
+    <div class="type-tabs"><div class="type-tab active" onclick="filterInspeksi('',this)">Semua</div><div class="type-tab" onclick="filterInspeksi('APAR',this)">🧯 APAR</div><div class="type-tab" onclick="filterInspeksi('HYDRANT',this)">🚒 Hydrant</div><div class="type-tab" onclick="filterInspeksi('P3K',this)">🏥 P3K</div></div>
+    <div class="dt"><div class="dt-hdr"><h6><i class="fas fa-clipboard-check me-2" style="color:var(--purple)"></i>Riwayat Inspeksi</h6>
+      <button class="btn btn-sm btn-navy" onclick="openInspModal()"><i class="fas fa-plus me-1"></i>Form Inspeksi Baru</button>
+    </div>
+    <div style="overflow-x:auto;"><table class="table table-hover"><thead><tr><th>Tgl</th><th>Tipe</th><th>Aset</th><th>Lokasi</th><th>Inspektor</th><th>Hasil</th><th>Aksi</th></tr></thead><tbody id="insp-tbody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- PETA -->
+  <div id="view-map" style="display:none;">
+    <div class="dt mb-3 p-3"><div class="d-flex gap-3 flex-wrap align-items-center">
+      <strong style="font-size:.85rem;color:var(--navy)">Tampilkan:</strong>
+      <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" id="show-apar" checked onchange="refreshMainMarkers()"><label class="form-check-label fw-bold" for="show-apar" style="color:var(--orange)">🧯 APAR</label></div>
+      <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" id="show-hydrant" checked onchange="refreshMainMarkers()"><label class="form-check-label fw-bold" for="show-hydrant" style="color:#0066cc">🚒 Hydrant</label></div>
+      <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" id="show-equip" checked onchange="refreshMainMarkers()"><label class="form-check-label fw-bold" for="show-equip" style="color:var(--teal)">⚙️ Peralatan</label></div>
+      <div class="form-check form-check-inline mb-0"><input class="form-check-input" type="checkbox" id="show-p3k" checked onchange="refreshMainMarkers()"><label class="form-check-label fw-bold" for="show-p3k" style="color:var(--blue)">🏥 P3K</label></div>
+      <div class="ms-auto d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary active" id="btn-sat" onclick="switchMainLayer('satellite')">🛰 Satelit</button>
+        <button class="btn btn-sm btn-outline-secondary" id="btn-str" onclick="switchMainLayer('street')">🗺 Jalan</button>
+        <button class="btn btn-sm btn-navy" onclick="reloadMainMap()"><i class="fas fa-sync me-1"></i>Refresh</button>
+      </div>
+    </div></div>
+    <div style="border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.1);">
+      <div id="lmap"></div>
+      <div class="map-legend">
+        <div class="d-flex align-items-center gap-1"><span class="ml-dot" style="background:#e8821a"></span>APAR OK</div>
+        <div class="d-flex align-items-center gap-1"><span class="ml-dot" style="background:#dc3545"></span>Expired</div>
+        <div class="d-flex align-items-center gap-1"><span class="ml-dot" style="background:#ffa500"></span>Segera Exp</div>
+        <div class="d-flex align-items-center gap-1"><span class="ml-dot" style="background:#3498db"></span>P3K</div>
+        <div class="d-flex align-items-center gap-1"><span class="ml-dot" style="background:#0066cc"></span>Hydrant</div>
+        <div class="d-flex align-items-center gap-1"><span class="ml-dot" style="background:#17a589"></span>Peralatan</div>
+        <span class="ms-auto text-muted" style="font-size:.72rem;">ESRI + OSM (Gratis)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- GANTI PASSWORD -->
+  <div id="view-profil" style="display:none;">
+    <div class="dt p-4" style="max-width:420px;">
+      <h6 class="sec-title"><i class="fas fa-key"></i>Ganti Password</h6>
+      <div class="mb-3"><label class="form-label">Password Lama *</label><input type="password" class="form-control" id="cp-old"></div>
+      <div class="mb-3"><label class="form-label">Password Baru * <small class="text-muted">(min 6 karakter)</small></label><input type="password" class="form-control" id="cp-new"></div>
+      <div class="mb-4"><label class="form-label">Konfirmasi Password Baru *</label><input type="password" class="form-control" id="cp-confirm"></div>
+      <button class="btn btn-navy" onclick="doChangePass()"><i class="fas fa-save me-2"></i>Simpan Password Baru</button>
+      <div id="cp-msg" class="mt-3"></div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="view-admin" style="display:none;">
+    <ul class="nav nav-tabs mb-4" id="adm-tabs">
+      <li class="nav-item"><a class="nav-link active" href="#" onclick="admTab('settings',this);return false;">⚙️ Pengaturan</a></li>
+      <li class="nav-item"><a class="nav-link" href="#" onclick="admTab('users',this);return false;">👥 Pengguna</a></li>
+      <li class="nav-item"><a class="nav-link" href="#" onclick="admTab('notif',this);return false;">🔔 Notifikasi</a></li>
+    </ul>
+    <div id="adm-settings"><div class="dt p-4" style="max-width:520px;">
+      <h6 class="sec-title"><i class="fas fa-cog"></i>Pengaturan Sistem & Peta</h6>
+      <div class="alert alert-success py-2 mb-3" style="font-size:.82rem;"><i class="fas fa-check-circle me-2"></i><b>Peta 100% Gratis!</b> Leaflet.js + ESRI World Imagery.</div>
+      <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">Lat Pusat Peta</label><input type="number" class="form-control" id="cfg-lat" step="0.0001"></div><div class="col-6"><label class="form-label">Lng Pusat Peta</label><input type="number" class="form-control" id="cfg-lng" step="0.0001"></div></div>
+      <div class="mb-3"><label class="form-label">Zoom Level</label><input type="number" class="form-control" id="cfg-zoom" min="10" max="22"></div>
+      <div class="mb-3"><label class="form-label">Hari Alert Sebelum Expired</label><input type="number" class="form-control" id="cfg-days" min="1" max="365"></div>
+      <div class="mb-3"><label class="form-label">Email Admin</label><input type="email" class="form-control" id="cfg-admin"></div>
+      <div class="mb-4"><label class="form-label">Email Laporan <small class="text-muted">(pisah koma)</small></label><input type="text" class="form-control" id="cfg-rep"></div>
+      <button class="btn btn-navy" onclick="saveSettings()"><i class="fas fa-save me-2"></i>Simpan</button>
+    </div></div>
+    <div id="adm-users" style="display:none;"><div class="dt"><div class="dt-hdr"><h6>👥 Pengguna</h6><button class="btn btn-sm btn-navy" onclick="openUserModal()"><i class="fas fa-user-plus me-1"></i>Tambah</button></div>
+      <div style="overflow-x:auto;"><table class="table"><thead><tr><th>Username</th><th>Nama</th><th>Role</th><th>Status</th><th>Email</th><th>Aksi</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
+      <div class="p-3" style="font-size:.8rem;color:#6c757d;border-top:1px solid #eee;"><b>Default password</b> user baru: <code>password123</code> | Email diperlukan untuk fitur Lupa Password</div>
+    </div></div>
+    <div id="adm-notif" style="display:none;"><div class="dt p-4" style="max-width:520px;">
+      <h6 class="sec-title"><i class="fas fa-bell"></i>Notifikasi Email</h6>
+      <ul style="font-size:.86rem;line-height:2.2;padding-left:20px;"><li>Alert harian jam 08:00</li><li>Laporan bulanan tgl 1 jam 07:00</li></ul>
+      <div class="d-flex gap-2 flex-wrap mt-3">
+        <button class="btn btn-navy" onclick="setupTriggers()"><i class="fas fa-clock me-2"></i>Aktifkan Trigger</button>
+        <button class="btn btn-outline-secondary" onclick="testAlert()"><i class="fas fa-vial me-2"></i>Test Alert</button>
+        <button class="btn btn-outline-secondary" onclick="testReport()"><i class="fas fa-file-alt me-2"></i>Test Laporan</button>
+      </div>
+      <div id="trg-msg" class="mt-3"></div>
+    </div></div>
+  </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- MODAL QR -->
+<div class="modal fade" id="qrModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-qrcode me-2"></i>QR Code APAR</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="qr-apar-info mb-3" id="qr-apar-info"></div>
+      <div id="qr-canvas-wrap" style="text-align:center;padding:16px;background:#fff;border-radius:8px;border:1px solid #dee2e6;">
+        <div id="qr-render"></div>
+        <div class="qr-url-box" id="qr-url-box"></div>
+      </div>
+      <div class="alert alert-info py-2 mt-3" style="font-size:.82rem;"><i class="fas fa-info-circle me-2"></i>Scan QR code dengan kamera HP → langsung buka form inspeksi APAR.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+      <button class="btn btn-outline-secondary" onclick="printQR()"><i class="fas fa-print me-2"></i>Print</button>
+      <button class="btn btn-navy" onclick="downloadQR()"><i class="fas fa-download me-2"></i>Download PNG</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Print area -->
+<div id="print-qr-area" style="display:none;"><div style="text-align:center;font-family:'Rajdhani',sans-serif;">
+  <h2 style="color:#1a3a5c;margin-bottom:8px;">🧯 APAR — Form Inspeksi QR</h2>
+  <div id="print-apar-detail" style="font-size:14px;margin-bottom:16px;color:#333;"></div>
+  <div id="print-qr-canvas" style="display:inline-block;border:4px solid #1a3a5c;padding:12px;border-radius:8px;background:#fff;"></div>
+  <p style="margin-top:12px;font-size:12px;color:#666;">Scan QR → Form Inspeksi Digital | HSE Monitor</p>
+</div></div>
+
+<!-- MODAL APAR -->
+<div class="modal fade" id="aparModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-fire-extinguisher me-2"></i><span id="apar-mtitle">Tambah APAR</span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><input type="hidden" id="apar-id">
+      <div class="row g-3">
+        <div class="col-lg-5"><div class="row g-3">
+          <div class="col-6"><label class="form-label">Jenis *</label><select class="form-select" id="apar-jenis"><option>CO2</option><option>Dry Powder</option><option>Foam</option><option>Halotron</option><option>Water</option><option>Wet Chemical</option></select></div>
+          <div class="col-6"><label class="form-label">Brand</label><input type="text" class="form-control" id="apar-brand"></div>
+          <div class="col-6"><label class="form-label">Kapasitas</label><input type="text" class="form-control" id="apar-kap" placeholder="3 kg, 6 kg…"></div>
+          <div class="col-6"><label class="form-label">Status</label><select class="form-select" id="apar-status"><option>Aktif</option><option>Tidak Aktif</option><option>Rusak</option></select></div>
+          <div class="col-6"><label class="form-label">Tgl Isi *</label><input type="date" class="form-control" id="apar-isi"></div>
+          <div class="col-6"><label class="form-label">Tgl Expired *</label><input type="date" class="form-control" id="apar-exp"></div>
+          <div class="col-12"><label class="form-label">Label Lokasi *</label><input type="text" class="form-control" id="apar-lok" placeholder="Gudang A — Pintu Utama"></div>
+          <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" id="apar-cat" rows="2"></textarea></div>
+        </div></div>
+        <div class="col-lg-7">
+          <label class="form-label">📍 Titik Lokasi — <span style="color:var(--navy);font-weight:600">Klik peta untuk koordinat</span></label>
+          <div class="form-map-wrap" id="apar-map-wrap"><div class="form-map-hint" id="apar-map-hint">🎯 Klik titik lokasi pada peta satelit</div>
+            <div style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;"><button class="map-layer-btn active" id="apar-btn-sat" onclick="switchFLayer('apar','satellite')">🛰</button><button class="map-layer-btn" id="apar-btn-str" onclick="switchFLayer('apar','street')">🗺</button></div>
+            <div class="fmap" id="apar-fmap"></div></div>
+          <div class="coord-row">
+            <div style="flex:1"><label class="form-label">Latitude</label><div class="coord-val" id="apar-lat-disp">—</div><input type="hidden" id="apar-lat"></div>
+            <div style="flex:1"><label class="form-label">Longitude</label><div class="coord-val" id="apar-lng-disp">—</div><input type="hidden" id="apar-lng"></div>
+            <div style="align-self:flex-end;display:flex;gap:4px;">
+              <button class="btn btn-sm btn-gps" id="apar-gps-btn" onclick="getCurrentLocation('apar')" title="Ambil Lokasi GPS dengan akurasi tinggi"><i class="fas fa-location-crosshairs"></i> Ambil Lokasi</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="clearFCoord('apar')" title="Hapus koordinat"><i class="fas fa-times"></i></button>
+            </div>
+          </div>
+          <div id="apar-accuracy-info" class="gps-accuracy-info"></div>
+          <small class="text-muted" style="font-size:.73rem;"><i class="fas fa-info-circle me-1"></i>Pin bisa di-drag setelah diletakkan</small>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-orange" onclick="saveApar()"><i class="fas fa-save me-2"></i>Simpan APAR</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL EQUIPMENT -->
+<div class="modal fade" id="equipModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-network-wired me-2"></i><span id="equip-mtitle">Tambah Peralatan</span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><input type="hidden" id="equip-id">
+      <div class="row g-3">
+        <div class="col-lg-5"><div class="row g-3">
+          <div class="col-7"><label class="form-label">Tipe *</label><select class="form-select" id="equip-tipe"></select></div>
+          <div class="col-5"><label class="form-label">Status</label><select class="form-select" id="equip-status"><option>Aktif</option><option>Tidak Aktif</option><option>Rusak</option></select></div>
+          <div class="col-12"><label class="form-label">Nama / Kode *</label><input type="text" class="form-control" id="equip-nama" placeholder="HYD-01, ALRM-A3…"></div>
+          <div class="col-12"><label class="form-label">Label Lokasi *</label><input type="text" class="form-control" id="equip-lok"></div>
+          <div class="col-6"><label class="form-label">Tgl Pemasangan</label><input type="date" class="form-control" id="equip-pasang"></div>
+          <div class="col-6"><label class="form-label">Tgl Expired / Kalibrasi</label><input type="date" class="form-control" id="equip-exp"></div>
+          <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" id="equip-cat" rows="2"></textarea></div>
+        </div></div>
+        <div class="col-lg-7">
+          <label class="form-label">📍 Titik Lokasi</label>
+          <div class="form-map-wrap" id="equip-map-wrap"><div class="form-map-hint" id="equip-map-hint">🎯 Klik titik lokasi pada peta satelit</div>
+            <div style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;"><button class="map-layer-btn active" id="equip-btn-sat" onclick="switchFLayer('equip','satellite')">🛰</button><button class="map-layer-btn" id="equip-btn-str" onclick="switchFLayer('equip','street')">🗺</button></div>
+            <div class="fmap" id="equip-fmap"></div></div>
+          <div class="coord-row">
+            <div style="flex:1"><label class="form-label">Latitude</label><div class="coord-val" id="equip-lat-disp">—</div><input type="hidden" id="equip-lat"></div>
+            <div style="flex:1"><label class="form-label">Longitude</label><div class="coord-val" id="equip-lng-disp">—</div><input type="hidden" id="equip-lng"></div>
+            <div style="align-self:flex-end;display:flex;gap:4px;">
+              <button class="btn btn-sm btn-gps" id="equip-gps-btn" onclick="getCurrentLocation('equip')" title="Ambil Lokasi GPS dengan akurasi tinggi"><i class="fas fa-location-crosshairs"></i> Ambil Lokasi</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="clearFCoord('equip')" title="Hapus koordinat"><i class="fas fa-times"></i></button>
+            </div>
+          </div>
+          <div id="equip-accuracy-info" class="gps-accuracy-info"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-navy" onclick="saveEquip()"><i class="fas fa-save me-2"></i>Simpan</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL P3K LOKASI -->
+<div class="modal fade" id="p3kLokModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-map-pin me-2"></i><span id="p3klok-mtitle">Tambah Lokasi P3K</span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><input type="hidden" id="p3klok-id">
+      <div class="mb-3"><label class="form-label">Label Lokasi *</label><input type="text" class="form-control" id="p3klok-lab"></div>
+      <label class="form-label">📍 Titik Lokasi</label>
+      <div class="form-map-wrap" id="p3klok-map-wrap"><div class="form-map-hint" id="p3klok-map-hint">🎯 Klik titik lokasi pada peta satelit</div>
+        <div style="position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:4px;"><button class="map-layer-btn active" id="p3klok-btn-sat" onclick="switchFLayer('p3klok','satellite')">🛰</button><button class="map-layer-btn" id="p3klok-btn-str" onclick="switchFLayer('p3klok','street')">🗺</button></div>
+        <div class="fmap" id="p3klok-fmap"></div></div>
+      <div class="coord-row">
+        <div style="flex:1"><label class="form-label">Latitude</label><div class="coord-val" id="p3klok-lat-disp">—</div><input type="hidden" id="p3klok-lat"></div>
+        <div style="flex:1"><label class="form-label">Longitude</label><div class="coord-val" id="p3klok-lng-disp">—</div><input type="hidden" id="p3klok-lng"></div>
+        <div style="align-self:flex-end;display:flex;gap:4px;">
+          <button class="btn btn-sm btn-gps" id="p3klok-gps-btn" onclick="getCurrentLocation('p3klok')" title="Ambil Lokasi GPS dengan akurasi tinggi"><i class="fas fa-location-crosshairs"></i> Ambil Lokasi</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="clearFCoord('p3klok')" title="Hapus koordinat"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div id="p3klok-accuracy-info" class="gps-accuracy-info"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-navy" onclick="saveP3kLok()"><i class="fas fa-save me-2"></i>Simpan</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL P3K ITEM, PEMAKAIAN, INSPEKSI, INSPEKSI DETAIL, USER — (sama seperti sebelumnya, dipadatkan) -->
+<div class="modal fade" id="p3kItemModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-pills me-2"></i><span id="p3kitem-mtitle">Tambah Item</span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="p3kitem-id"><input type="hidden" id="p3kitem-p3kid"><input type="hidden" id="p3kitem-lok"><div class="row g-3"><div class="col-8"><label class="form-label">Nama Item *</label><input type="text" class="form-control" id="p3kitem-nama"></div><div class="col-4"><label class="form-label">Satuan *</label><input type="text" class="form-control" id="p3kitem-sat"></div><div class="col-6"><label class="form-label">Stok Awal</label><input type="number" class="form-control" id="p3kitem-sa" min="0" value="1"></div><div class="col-6"><label class="form-label">Stok Saat Ini</label><input type="number" class="form-control" id="p3kitem-si" min="0" value="1"></div><div class="col-12"><label class="form-label">Tgl Expired *</label><input type="date" class="form-control" id="p3kitem-exp"></div></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-navy" onclick="saveP3kItem()"><i class="fas fa-save me-2"></i>Simpan</button></div></div></div></div>
+<div class="modal fade" id="pemModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header" style="background:var(--orange);color:#fff;"><h5 class="modal-title"><i class="fas fa-minus-circle me-2"></i>Catat Pemakaian P3K</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="pem-p3kid"><input type="hidden" id="pem-lok"><div class="mb-3"><label class="form-label">Pilih Item *</label><select class="form-select" id="pem-item" onchange="onPemItem()"><option value="">— Pilih —</option></select></div><div class="row g-3 mb-3"><div class="col-6"><label class="form-label">Jumlah *</label><input type="number" class="form-control" id="pem-jml" min="1" value="1"></div><div class="col-6"><label class="form-label">Tanggal *</label><input type="date" class="form-control" id="pem-tgl"></div></div><label class="form-label">Keterangan / Nama Pasien</label><input type="text" class="form-control" id="pem-ket"><div id="pem-stok" class="mt-2 text-muted" style="font-size:.8rem;"></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-orange" onclick="savePem()"><i class="fas fa-check me-2"></i>Catat</button></div></div></div></div>
+<div class="modal fade" id="inspModal" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-clipboard-check me-2"></i>Form Inspeksi</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row g-3 mb-3"><div class="col-md-4"><label class="form-label">Tipe *</label><select class="form-select" id="insp-tipe" onchange="onInspTipe()"><option value="">— Pilih —</option><option value="APAR">🧯 APAR</option><option value="HYDRANT">🚒 Hydrant</option><option value="P3K">🏥 Kotak P3K</option></select></div><div class="col-md-4"><label class="form-label">Aset *</label><select class="form-select" id="insp-aset"><option value="">— Pilih Aset —</option></select></div><div class="col-md-4"><label class="form-label">Inspektor *</label><input type="text" class="form-control" id="insp-inspektor"></div><div class="col-md-4"><label class="form-label">Tanggal *</label><input type="date" class="form-control" id="insp-tgl"></div></div><div id="insp-cl-wrap" style="display:none;"><hr><div class="sec-title mb-2"><i class="fas fa-list-check"></i>Checklist</div><div class="mb-2 d-flex gap-3" style="font-size:.8rem;color:#6c757d;"><span>✅ OK = Baik</span><span>❌ NG = Tidak OK</span><span>⬜ N/A = Tidak Berlaku</span></div><div id="insp-cl-list"></div><div class="mt-3"><label class="form-label">Catatan Umum</label><textarea class="form-control" id="insp-cat" rows="2"></textarea></div></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-navy" id="insp-submit-btn" onclick="saveInspeksi()" style="display:none;"><i class="fas fa-save me-2"></i>Simpan</button></div></div></div></div>
+<div class="modal fade" id="inspDetailModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-file-contract me-2"></i>Detail Inspeksi</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body" id="insp-detail-body"></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button></div></div></div></div>
+<div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header" style="background:var(--navy);color:#fff;"><h5 class="modal-title"><i class="fas fa-user me-2"></i><span id="user-mtitle">Tambah Pengguna</span></h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="user-id"><div class="mb-3"><label class="form-label">Username *</label><input type="text" class="form-control" id="user-uname"></div><div class="mb-3"><label class="form-label">Nama Lengkap *</label><input type="text" class="form-control" id="user-nama"></div><div class="mb-3"><label class="form-label">Role *</label><select class="form-select" id="user-role"><option value="operator">Operator</option><option value="hse">HSE Officer</option><option value="admin">Admin</option></select></div><div class="mb-3"><label class="form-label">Password <small class="text-muted">(kosong = default password123)</small></label><input type="password" class="form-control" id="user-pass"></div><div class="mb-3"><label class="form-label">Email <small class="text-muted fw-normal">(diperlukan untuk Lupa Password)</small></label><input type="email" class="form-control" id="user-email"></div><div class="form-check"><input class="form-check-input" type="checkbox" id="user-aktif" checked><label class="form-check-label" for="user-aktif">Akun Aktif</label></div></div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-navy" onclick="saveUser()"><i class="fas fa-save me-2"></i>Simpan</button></div></div></div></div>
+
+<!-- TOAST -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:11000;">
+  <div id="app-toast" class="toast text-white border-0"><div class="d-flex"><div class="toast-body" id="toast-msg">OK</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// ================================================================
+//  SCAN MODE — jalankan pertama, sebelum apapun
+// ================================================================
+(function(){
+  if(String(SCAN_MODE)!=='true') return;
+
+  document.getElementById('loading-sc').style.display = 'none';
+  document.getElementById('scan-page').style.display  = 'block';
+
+  // Data dimuat async via loadScanData() — tampilkan spinner dulu
+  document.getElementById('scan-body').innerHTML =
+    '<div class="text-center py-5">'
+    +'<i class="fas fa-spinner fa-spin fa-2x" style="color:#5dade2"></i>'
+    +'<p style="color:#adb5bd;margin-top:12px;font-size:.9rem">Memuat data aset...</p>'
+    +'</div>';
+})();
+
+// ── Helpers scan ──────────────────────────────────────────────────
+function fd(d){if(!d)return'—';try{return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return'—';}}
+function todayISO(){return new Date().toISOString().substring(0,10);}
+
+// FIX 1: render penuh semua parameter inspeksi APAR (9 item + catatan per item)
+function renderScanPage(data){
+  // Routing berdasarkan _scanType
+  if(data&&data._scanType==='equip'){renderScanPageEquip(data);return;}
+  if(data&&data._scanType==='p3k') {renderScanPageP3k(data);return;}
+  // Default: APAR
+  const body = document.getElementById('scan-body');
+  if(!data||data._notFound){
+    body.innerHTML=`<div class="scan-card" style="margin-top:20px;text-align:center"><i class="fas fa-exclamation-triangle fa-3x" style="color:var(--red);margin-bottom:16px;display:block"></i><h4 style="color:var(--red)">APAR Tidak Ditemukan</h4><p style="color:#6c757d">ID: ${data?._id||'?'}</p><p>QR code tidak valid atau APAR telah dihapus.</p></div>`;
+    return;
+  }
+
+  const now=new Date(), exp=data.Tgl_Expired?new Date(data.Tgl_Expired):null;
+  const ms=exp?exp-now:Infinity;
+  const sCls=ms<0?'status-exp':ms<30*86400000?'status-near':'status-ok';
+  const sTxt=ms<0?'⚠️ KEDALUWARSA':ms<30*86400000?'⏰ Segera Expired':'✅ Aktif';
+
+  // Riwayat inspeksi terakhir
+  let lastHtml='';
+  if(data._lastInspeksi){
+    const li=data._lastInspeksi;
+    const lc=li.Status_Akhir==='LULUS'?'status-ok':li.Status_Akhir==='PERLU PERBAIKAN'?'status-near':'status-exp';
+    const prevCl=(li.Checklist||[]);
+    const okCnt=prevCl.filter(i=>i.nilai==='OK').length;
+    const ngCnt=prevCl.filter(i=>i.nilai==='NG').length;
+    lastHtml=`<div class="last-insp-box">
+      <b>📋 Inspeksi Terakhir</b><br>
+      <span>Tanggal: ${fd(li.Tgl_Inspeksi)} | Inspektor: ${li.Inspektor}</span><br>
+      <span>Hasil: <span class="status-chip ${lc}" style="padding:2px 8px;font-size:.72rem">${li.Status_Akhir}</span>
+      &nbsp;|&nbsp; <span class="prev-ok">✅ ${okCnt} OK</span> &nbsp;
+      <span class="prev-ng">❌ ${ngCnt} NG</span></span>
+    </div>`;
+  }
+
+  // FIX 1: Checklist lengkap — setiap item punya tombol OK/NG/NA + catatan
+  const cl=data._checklistDef||[];
+  window._scanCk=cl.map(item=>({id:item.id,label:item.label,nilai:'OK',catatan:''}));
+
+  const clHtml=cl.map((item,idx)=>`
+    <div class="ck-scan ck-ok" id="cks-${idx}">
+      <div class="ck-scan-label"><b>${idx+1}.</b> ${item.label}</div>
+      <div class="ck-btn-row">
+        <div class="ck-btn sel-ok" id="ckb-ok-${idx}" onclick="setScanCk(${idx},'OK')">✅ OK</div>
+        <div class="ck-btn" id="ckb-ng-${idx}" onclick="setScanCk(${idx},'NG')">❌ NG</div>
+        <div class="ck-btn" id="ckb-na-${idx}" onclick="setScanCk(${idx},'NA')">N/A</div>
+      </div>
+      <input class="ck-note" id="ckn-${idx}" placeholder="Catatan item ini (opsional)…" oninput="window._scanCk[${idx}].catatan=this.value">
+    </div>`).join('');
+
+  body.innerHTML=`
+    <div class="scan-card">
+      <div class="id-badge"><i class="fas fa-fire-extinguisher me-1"></i>${data.ID||'?'}</div>
+      <h5><i class="fas fa-info-circle"></i>Identitas APAR</h5>
+      <div class="info-row"><span class="info-label">Jenis APAR</span><span class="info-val">${data.Jenis||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Brand / Merek</span><span class="info-val">${data.Brand||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Kapasitas</span><span class="info-val">${data.Kapasitas||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Lokasi</span><span class="info-val">${data.Lokasi_Label||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Tgl Isi / Refill</span><span class="info-val">${fd(data.Tgl_Isi)}</span></div>
+      <div class="info-row"><span class="info-label">Tgl Expired</span><span class="info-val">${fd(data.Tgl_Expired)}</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-val"><span class="status-chip ${sCls}">${sTxt}</span></span></div>
+      ${data.Catatan?`<div class="info-row"><span class="info-label">Catatan</span><span class="info-val" style="color:#6c757d;font-size:.82rem">${data.Catatan}</span></div>`:''}
+    </div>
+
+    <div class="scan-card">
+      <h5><i class="fas fa-clipboard-check"></i>Form Inspeksi Rutin APAR</h5>
+      ${lastHtml}
+      <div class="row g-2 mb-3">
+        <div class="col-8">
+          <label class="form-label">Nama Inspektor *</label>
+          <input type="text" class="form-control" id="scan-inspektor" placeholder="Nama lengkap Anda" style="font-size:.9rem;">
+        </div>
+        <div class="col-4">
+          <label class="form-label">Tanggal Inspeksi</label>
+          <input type="date" class="form-control" id="scan-tgl" value="${todayISO()}" style="font-size:.9rem;">
+        </div>
+      </div>
+
+      <div class="alert alert-light py-2 mb-3" style="font-size:.8rem;border:1px solid #dee2e6;">
+        <b>Petunjuk:</b> Ketuk <span style="background:#28a745;color:#fff;padding:1px 7px;border-radius:4px;font-size:.75rem">✅ OK</span> jika kondisi baik,
+        <span style="background:#dc3545;color:#fff;padding:1px 7px;border-radius:4px;font-size:.75rem">❌ NG</span> jika ada masalah,
+        <span style="background:#6c757d;color:#fff;padding:1px 7px;border-radius:4px;font-size:.75rem">N/A</span> jika tidak berlaku.
+        Tambahkan catatan jika perlu.
+      </div>
+
+      <div id="scan-cl">${clHtml}</div>
+
+      <!-- Ringkasan NG -->
+      <div id="scan-ng-summary" style="display:none;" class="alert alert-warning py-2 mb-3" style="font-size:.82rem;"></div>
+
+      <div class="mb-4">
+        <label class="form-label">Catatan Umum / Temuan</label>
+        <textarea class="form-control" id="scan-catatan" rows="3" placeholder="Temuan keseluruhan, rekomendasi, rencana tindak lanjut…" style="font-size:.86rem;"></textarea>
+      </div>
+
+      <button class="btn btn-navy w-100 py-3" id="scan-submit" style="font-size:1rem;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.5px;" onclick="submitScan('${data.ID}','${(data.Jenis+' '+(data.Brand||'')).trim()}','${data.Lokasi_Label}')">
+        <i class="fas fa-paper-plane me-2"></i>KIRIM HASIL INSPEKSI
+      </button>
+    </div>`;
+}
+
+// FIX 1: set state per-item dan update visual border
+function setScanCk(idx, nilai){
+  if(!window._scanCk) return;
+  window._scanCk[idx].nilai = nilai;
+
+  // Reset tombol
+  ['ok','ng','na'].forEach(v=>{
+    const btn=document.getElementById('ckb-'+v+'-'+idx);
+    if(btn){btn.classList.remove('sel-ok','sel-ng','sel-na');}
+  });
+  const active=document.getElementById('ckb-'+nilai.toLowerCase()+'-'+idx);
+  if(active) active.classList.add('sel-'+nilai.toLowerCase());
+
+  // Update border card
+  const card=document.getElementById('cks-'+idx);
+  if(card){
+    card.classList.remove('ck-ok','ck-ng','ck-na');
+    card.classList.add('ck-'+nilai.toLowerCase());
+  }
+
+  // Tampilkan ringkasan NG
+  updateNgSummary();
+}
+
+function updateNgSummary(){
+  if(!window._scanCk) return;
+  const ngItems=window._scanCk.filter(i=>i.nilai==='NG');
+  const el=document.getElementById('scan-ng-summary');
+  if(!el) return;
+  if(ngItems.length===0){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML='<b>⚠️ '+ngItems.length+' item NG:</b> '+ngItems.map(i=>'<br>• '+i.label).join('');
+}
+
+function submitScan(asetId, asetNama, lokasiLabel, tipeForm){
+  const inspektor=document.getElementById('scan-inspektor').value.trim();
+  const tgl=document.getElementById('scan-tgl').value;
+  const catatan=document.getElementById('scan-catatan').value;
+  if(!inspektor){
+    document.getElementById('scan-inspektor').style.borderColor='red';
+    document.getElementById('scan-inspektor').focus();
+    document.getElementById('scan-inspektor').placeholder='⚠️ Nama inspektor wajib diisi!';
+    return;
+  }
+  const btn=document.getElementById('scan-submit');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i>Mengirim…';
+
+  const clItems=(window._scanCk||[]).map((item,idx)=>{
+    const noteEl=document.getElementById('ckn-'+idx);
+    return{id:item.id,label:item.label,nilai:item.nilai,catatan:noteEl?noteEl.value:''};
+  });
+
+  const data={Tipe_Form:tipeForm||'APAR',Aset_ID:asetId,Aset_Nama:asetNama,Lokasi_Label:lokasiLabel,
+    Tgl_Inspeksi:tgl,Inspektor:inspektor,Checklist_JSON:JSON.stringify(clItems),Catatan:catatan};
+
+  api('saveInspeksiFromScan',data).then(res=>{
+      if(res.ok){
+        const ng=clItems.filter(i=>i.nilai==='NG').length;
+        const isL=res.Status==='LULUS',isP=res.Status==='PERLU PERBAIKAN';
+        const col=isL?'#28a745':isP?'#856404':'#721c24';
+        const icon=isL?'fa-check-circle':isP?'fa-exclamation-circle':'fa-times-circle';
+        const ico_col=isL?'#28a745':isP?'#ffc107':'#dc3545';
+        document.getElementById('scan-body').innerHTML=`
+          <div class="scan-card" style="margin-top:20px">
+            <div class="scan-result">
+              <span class="result-icon"><i class="fas ${icon}" style="color:${ico_col}"></i></span>
+              <h4 style="color:${col}">${res.Status}</h4>
+              <p style="color:#6c757d;margin-bottom:16px">Hasil inspeksi berhasil dicatat dalam sistem</p>
+              <div class="summary-box">
+                <div class="info-row"><span class="info-label">APAR</span><span class="info-val">${asetNama}</span></div>
+                <div class="info-row"><span class="info-label">Lokasi</span><span class="info-val">${lokasiLabel}</span></div>
+                <div class="info-row"><span class="info-label">Inspektor</span><span class="info-val">${inspektor}</span></div>
+                <div class="info-row"><span class="info-label">Tanggal</span><span class="info-val">${fd(tgl)}</span></div>
+                <div class="info-row"><span class="info-label">Item diperiksa</span><span class="info-val">${clItems.length} item</span></div>
+                <div class="info-row" style="border:none"><span class="info-label">Item NG / Bermasalah</span>
+                  <span class="info-val" style="color:${ng>0?'#dc3545':'#28a745'}">${ng} item</span></div>
+              </div>
+              ${ng>0?`<div class="alert alert-warning mt-3 text-start" style="font-size:.82rem;"><i class="fas fa-wrench me-2"></i><b>${ng} item perlu perhatian.</b> Segera laporkan kepada petugas HSE untuk tindak lanjut perbaikan.</div>`:''}
+              <button class="btn btn-navy mt-3 w-100" onclick="location.reload()"><i class="fas fa-redo me-2"></i>Inspeksi ${tipeForm||'APAR'} Lain</button>
+            </div>
+          </div>`;
+      } else {
+        btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane me-2"></i>KIRIM HASIL INSPEKSI';
+        alert('Gagal menyimpan: '+(res.msg||'Error tidak diketahui'));
+      }
+  }).catch(e=>{
+      btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane me-2"></i>KIRIM HASIL INSPEKSI';
+      alert('Error: '+e.message);
+  });
+}
+
+// ================================================================
+//  STATE (normal app)
+// ================================================================
+const A={me:null,cfg:{},aparList:[],equipAllList:[],p3kLok:[],p3kItems:{},selectedP3k:null,inspList:[],checklistDef:{},equipTypes:[],fmaps:{},fmarkers:{},flayers:{},gpsCircles:{},lmap:null,mainMarkers:[],mainLayer:'satellite',mainData:null,qrAparData:null};
+const TILE_URL={satellite:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',street:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'};
+const TILE_ATT={satellite:'Tiles © Esri',street:'© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'};
+function mkTile(type){return L.tileLayer(TILE_URL[type],{attribution:TILE_ATT[type],maxZoom:type==='satellite'?22:21,maxNativeZoom:type==='satellite'?20:19});}
+
+// ================================================================
+//  BOOTSTRAP
+// ================================================================
+window.addEventListener('load',()=>{
+  if(String(SCAN_MODE)==='true'){loadScanData();return;}
+  api('initApp').catch(()=>{});
+  const token=sessionStorage.getItem('hse_token');
+  if(token){api('verifySession').then(s=>{if(s&&!s._authError)startApp(s);else showLogin();}).catch(()=>showLogin());}
+  else showLogin();
+});
+
+function showLogin(){document.getElementById('loading-sc').style.display='none';document.getElementById('login-sc').style.display='flex';setTimeout(()=>document.getElementById('login-user').focus(),200);}
+function startApp(sess){
+  A.me=sess;
+  document.getElementById('loading-sc').style.display='none';document.getElementById('login-sc').style.display='none';
+  document.getElementById('sidebar').style.display='flex';document.getElementById('main').style.display='block';
+  document.getElementById('sb-nama').textContent=sess.Nama;document.getElementById('sb-role').textContent='Role: '+sess.Role;
+  document.getElementById('topbar-user').textContent=sess.Nama+' · '+sess.Role;
+  if(sess.Role!=='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='none');
+  api('getChecklistDef').then(r=>{A.checklistDef=r;}).catch(()=>{});
+  api('getEquipTypes').then(r=>{A.equipTypes=r;buildEquipTabs();buildEquipTypeSelect();}).catch(()=>{});
+  loadConfig(()=>loadDashboard());
+}
+
+// ================================================================
+//  LOGIN + LUPA PASSWORD
+// ================================================================
+function showAuthTab(tab, el){
+  document.querySelectorAll('#auth-tabs .nav-link').forEach(l=>l.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('auth-login').style.display = tab==='login'?'':'none';
+  document.getElementById('auth-forgot').style.display = tab==='forgot'?'':'none';
+  document.getElementById('login-err').style.display='none';
+  document.getElementById('login-ok').style.display='none';
+}
+
+function doLogin(){
+  const u=$v('login-user'),p=document.getElementById('login-pass').value;
+  if(!u||!p){showLoginMsg('err','Username dan password wajib!');return;}
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i>Memverifikasi…';
+  hideLoginMsg();
+  api('login',{username:u,password:p}).then(res=>{
+    btn.disabled=false;btn.innerHTML='<i class="fas fa-sign-in-alt me-2"></i>Masuk';
+    if(res.ok&&res.session){sessionStorage.setItem('hse_token',res.session.token);startApp(res.session);}
+    else showLoginMsg('err',res.msg||'Username atau password salah, atau akun tidak aktif.');
+  }).catch(e=>{btn.disabled=false;btn.innerHTML='<i class="fas fa-sign-in-alt me-2"></i>Masuk';showLoginMsg('err','Error: '+e.message);});
+}
+
+// FIX 3: Lupa password — kirim ke email terdaftar
+function doForgotPass(){
+  const u=$v('forgot-user').trim();
+  if(!u){showLoginMsg('err','Masukkan username Anda!');return;}
+  const btn=document.getElementById('forgot-btn');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i>Mengirim…';
+  hideLoginMsg();
+  api('forgotPassword',{username:u}).then(res=>{
+    btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane me-2"></i>Kirim Password Sementara';
+    if(res.ok){
+      showLoginMsg('ok','Password sementara berhasil dikirim ke email '+res.emailMasked+'. Cek inbox/spam Anda, lalu login dan segera ganti password.');
+      document.getElementById('forgot-user').value='';
+    } else {
+      showLoginMsg('err',res.msg||'Gagal mengirim reset password.');
+    }
+  }).catch(e=>{
+    btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane me-2"></i>Kirim Password Sementara';
+    showLoginMsg('err','Error: '+e.message);
+  });
+}
+
+function showLoginMsg(type, msg){
+  const err=document.getElementById('login-err'), ok=document.getElementById('login-ok');
+  if(type==='err'){err.textContent=msg;err.style.display='block';ok.style.display='none';}
+  else{ok.textContent=msg;ok.style.display='block';err.style.display='none';}
+}
+function hideLoginMsg(){document.getElementById('login-err').style.display='none';document.getElementById('login-ok').style.display='none';}
+function togglePV(){const i=document.getElementById('login-pass'),e=document.getElementById('pass-eye');if(i.type==='password'){i.type='text';e.className='fas fa-eye-slash';}else{i.type='password';e.className='fas fa-eye';}}
+function doLogout(){const t=sessionStorage.getItem('hse_token');sessionStorage.removeItem('hse_token');if(t)api('logout',{}).catch(()=>{});location.reload();}
+
+// ================================================================
+//  NAV
+// ================================================================
+function gv(name,link){
+  document.querySelectorAll('[id^="view-"]').forEach(v=>v.style.display='none');
+  document.getElementById('view-'+name).style.display='block';
+  document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));
+  if(link)link.classList.add('active');
+  const T={dashboard:'Dashboard',apar:'APAR',equip:'Peralatan Fire Safety',p3k:'Kotak P3K',inspeksi:'Form Inspeksi',map:'Peta Satelit',admin:'Admin',profil:'Ganti Password'};
+  document.getElementById('topbar-title').textContent=T[name]||name;
+  closeSb();
+  if(name==='dashboard')loadDashboard();if(name==='apar')loadApar();if(name==='equip')loadEquip();
+  if(name==='p3k')loadP3kLok();if(name==='inspeksi')loadInspeksi();
+  if(name==='map'){setTimeout(()=>initMainMap(),100);}if(name==='admin')loadAdmin();
+}
+function openSb(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('show');}
+function closeSb(){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show');}
+
+// ================================================================
+//  QR CODE
+// ================================================================
+function openQrModal(type, data){
+  // Backward compat: openQrModal(aparObj) — tanpa type
+  if(typeof type==='object'&&data===undefined){data=type;type='apar';}
+  A.qrData={type:type, ...data};
+
+  const labels={apar:'APAR',equip:'Peralatan',p3k:'Kotak P3K'};
+  const useTxt={apar:'form inspeksi APAR',equip:'form inspeksi Peralatan',p3k:'form penggunaan P3K'};
+  document.querySelector('#qrModal .modal-title').innerHTML=
+    '<i class="fas fa-qrcode me-2"></i>QR Code '+(labels[type]||type);
+  document.querySelector('#qrModal .alert-info').innerHTML=
+    '<i class="fas fa-info-circle me-2"></i>Scan QR untuk membuka '+(useTxt[type]||'')+' langsung di HP.';
+
+  let infoHtml='';
+  if(type==='apar'){
+    const now=new Date(),exp=data.Tgl_Expired?new Date(data.Tgl_Expired):null;
+    const ms=exp?exp-now:Infinity,sc=ms<0?'bs-exp':ms<30*86400000?'bs-near':'bs-ok',sl=ms<0?'EXPIRED':ms<30*86400000?'Segera Exp':'Aktif';
+    infoHtml=`
+      <div class="field"><span><b>ID APAR</b></span><span><code>${data.ID}</code></span></div>
+      <div class="field"><span>Jenis</span><span>${data.Jenis} ${data.Brand||''}</span></div>
+      <div class="field"><span>Kapasitas</span><span>${data.Kapasitas||'—'}</span></div>
+      <div class="field"><span>Lokasi</span><span>${data.Lokasi_Label}</span></div>
+      <div class="field"><span>Expired</span><span>${fd(data.Tgl_Expired)} <span class="bs ${sc}" style="margin-left:4px">${sl}</span></span></div>`;
+  }else if(type==='equip'){
+    infoHtml=`
+      <div class="field"><span><b>ID Peralatan</b></span><span><code>${data.ID}</code></span></div>
+      <div class="field"><span>Tipe</span><span>${data.Tipe||'—'}</span></div>
+      <div class="field"><span>Nama</span><span>${data.Nama||'—'}</span></div>
+      <div class="field"><span>Lokasi</span><span>${data.Lokasi_Label||'—'}</span></div>`;
+  }else if(type==='p3k'){
+    infoHtml=`
+      <div class="field"><span><b>ID Kotak P3K</b></span><span><code>${data.ID}</code></span></div>
+      <div class="field"><span>Lokasi</span><span>${data.Lokasi_Label||'—'}</span></div>`;
+  }
+  document.getElementById('qr-apar-info').innerHTML=infoHtml;
+
+  const qrUrl=location.origin+location.pathname+'?scan='+type+'&id='+encodeURIComponent(data.ID);
+  document.getElementById('qr-url-box').textContent=qrUrl;
+  document.getElementById('qr-render').innerHTML='';
+  try{new QRCode(document.getElementById('qr-render'),{text:qrUrl,width:220,height:220,colorDark:'#1a3a5c',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}
+  catch(e){document.getElementById('qr-render').innerHTML='<div class="alert alert-danger">Error: '+e.message+'</div>';}
+  toast('QR Code siap!','success');
+  new bootstrap.Modal(document.getElementById('qrModal')).show();
+}
+function downloadQR(){const c=document.querySelector('#qr-render canvas');if(!c){toast('QR belum siap','warning');return;}const l=document.createElement('a');const t=(A.qrData?.type||'APAR').toUpperCase();l.download='QR_'+t+'_'+(A.qrData?.ID||'export')+'.png';l.href=c.toDataURL('image/png');l.click();}
+function printQR(){
+  const c=document.querySelector('#qr-render canvas');if(!c){toast('QR belum siap','warning');return;}
+  const d=A.qrData||{};
+  let det='';
+  if(d.type==='apar')   det=`ID: ${d.ID} | ${d.Jenis||''} ${d.Brand||''} ${d.Kapasitas||''}<br>Lokasi: ${d.Lokasi_Label||'—'} | Expired: ${fd(d.Tgl_Expired)}`;
+  else if(d.type==='equip') det=`ID: ${d.ID} | ${d.Tipe||''}: ${d.Nama||''}<br>Lokasi: ${d.Lokasi_Label||'—'}`;
+  else if(d.type==='p3k')   det=`ID: ${d.ID} | Kotak P3K<br>Lokasi: ${d.Lokasi_Label||'—'}`;
+  document.getElementById('print-apar-detail').innerHTML=det;
+  const pC=document.getElementById('print-qr-canvas');pC.innerHTML='';
+  const img=document.createElement('img');img.src=c.toDataURL('image/png');img.style.width='200px';pC.appendChild(img);
+  document.getElementById('print-qr-area').style.display='block';
+  window.print();
+  setTimeout(()=>{document.getElementById('print-qr-area').style.display='none';},1000);
+}
+
+// ================================================================
+//  DASHBOARD
+// ================================================================
+function loadDashboard(){
+  document.getElementById('d-alerts').innerHTML='<div class="empty-st"><i class="fas fa-spinner fa-spin text-muted"></i><br>Memuat…</div>';
+  api('getDashboardData').then(d=>{
+    sv('d-apar-t',d.apar.total);sv('d-apar-e',(d.apar.expired+d.apar.near)||0);
+    sv('d-eq-t',d.equip.total);sv('d-eq-e',(d.equip.expired+d.equip.near)||0);
+    sv('d-p3k-l',d.p3k.totalLokasi);sv('d-p3k-e',d.p3k.expired);sv('d-p3k-s',d.p3k.lowStock);sv('d-ins-t',d.inspTotal);
+    const allA=[...(d.apar.alerts||[]).map(a=>({...a,_ico:'fa-fire-extinguisher'})),...(d.equip.alerts||[]).map(e=>({...e,_ico:'fa-network-wired'})),...(d.p3k.alerts||[]).map(i=>({...i,_ico:'fa-kit-medical'}))];
+    document.getElementById('d-alert-cnt').textContent=allA.length;
+    const alEl=document.getElementById('d-alerts');
+    if(!allA.length){alEl.innerHTML='<div class="empty-st"><i class="fas fa-check-circle text-success"></i><br>Semua aset OK!</div>';}
+    else alEl.innerHTML=allA.map(a=>{const isExp=a._cls==='EXPIRED',isLow=a._low;const col=isExp?'var(--red)':isLow?'var(--orange)':'var(--yellow)';const lbl=isExp?'EXPIRED':isLow?'STOK HABIS':'SEGERA EXP';const name=a.Jenis?`${a.Jenis} ${a.Brand||''}`:(a.Nama||a.Nama_Item||'');
+      return `<div class="ai ${isExp?'expired':isLow?'low':'near'}"><i class="fas ${a._ico}" style="color:${col}"></i><div><strong>${name}</strong><br><span style="font-size:.76rem;color:#6c757d">${a.Lokasi_Label||''}${a.Tgl_Expired?' · Exp: '+fd(a.Tgl_Expired):''}</span></div><span class="ms-auto bs" style="background:${col};color:${isLow||isExp?'#fff':'#333'};white-space:nowrap">${lbl}</span></div>`;}).join('');
+    const inEl=document.getElementById('d-insp');
+    if(!(d.recentInspeksi||[]).length){inEl.innerHTML='<div class="text-muted text-center py-2" style="font-size:.82rem">Belum ada inspeksi</div>';}
+    else inEl.innerHTML=d.recentInspeksi.map(i=>`<div class="ai ${i.Status_Akhir==='LULUS'?'pass':i.Status_Akhir==='PERLU PERBAIKAN'?'fix':'fail'}" style="margin-bottom:5px"><div><strong>${i.Tipe_Form} — ${i.Aset_Nama}</strong><br><span style="font-size:.75rem;color:#6c757d">${fd(i.Tgl_Inspeksi)} · ${i.Lokasi_Label}</span></div><span class="ms-auto bs ${i.Status_Akhir==='LULUS'?'bs-pass':i.Status_Akhir==='PERLU PERBAIKAN'?'bs-fix':'bs-fail'}">${i.Status_Akhir}</span></div>`).join('');
+    const uEl=document.getElementById('d-usage');
+    if(!(d.recentUsage||[]).length){uEl.innerHTML='<div class="text-muted text-center py-2" style="font-size:.82rem">Belum ada pemakaian</div>';}
+    else uEl.innerHTML=d.recentUsage.map(u=>`<div style="padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:.8rem;display:flex;gap:8px;"><span style="color:#adb5bd;min-width:76px">${fd(u.Tgl_Pemakaian)}</span><span><b>${u.Nama_Item}</b> — ${u.Jumlah} ${u.Satuan||''}</span><span style="color:#adb5bd;margin-left:auto">${u.By||''}</span></div>`).join('');
+  }).catch(e=>{toast('Error: '+e.message,'danger');document.getElementById('d-alerts').innerHTML=`<div class="alert alert-danger m-3">Error: ${e.message}</div>`;});
+}
+
+// ================================================================
+//  APAR — dengan tombol QR
+// ================================================================
+function loadApar(){api('getAparList').then(l=>{A.aparList=l;renderApar(l);}).catch(e=>toast('Error: '+e.message,'danger'));}
+function filterApar(){const q=document.getElementById('apar-search').value.toLowerCase();renderApar(A.aparList.filter(a=>[a.ID,a.Jenis,a.Brand,a.Kapasitas,a.Lokasi_Label].some(v=>(v||'').toLowerCase().includes(q))));}
+function renderApar(list){
+  const now=new Date(),am=(parseInt(A.cfg.ALERT_DAYS)||30)*86400000;
+  const tb=document.getElementById('apar-tbody');
+  if(!list.length){tb.innerHTML='<tr><td colspan="10" class="text-center text-muted py-4">Belum ada data APAR</td></tr>';return;}
+  tb.innerHTML=list.map(a=>{
+    const ms=a.Tgl_Expired?(new Date(a.Tgl_Expired)-now):Infinity;
+    const c=ms<0?'bs-exp':ms<am?'bs-near':'bs-ok',l=ms<0?'EXPIRED':ms<am?'Segera Exp':'Aktif';
+    const ce=A.me.Role!=='operator';
+    return `<tr><td><small class="text-muted">${a.ID}</small></td><td><b>${a.Jenis}</b></td><td>${a.Brand||'—'}</td><td>${a.Kapasitas||'—'}</td>
+      <td>${a.Lokasi_Label}</td><td>${fd(a.Tgl_Isi)}</td><td>${fd(a.Tgl_Expired)}</td>
+      <td><span class="bs ${c}">${l}</span></td>
+      <td><button class="btn btn-xs btn-outline-dark" onclick='openQrModal("apar",${JSON.stringify(a)})' title="QR Inspeksi APAR"><i class="fas fa-qrcode"></i></button></td>
+      <td>${ce?`<button class="btn btn-xs btn-outline-primary me-1" onclick='editApar(${JSON.stringify(a)})'><i class="fas fa-edit fa-xs"></i></button><button class="btn btn-xs btn-outline-danger" onclick="delApar('${a.ID}')"><i class="fas fa-trash fa-xs"></i></button>`:'—'}</td></tr>`;
+  }).join('');
+}
+function openAparModal(data){
+  document.getElementById('apar-mtitle').textContent=data?'Edit APAR':'Tambah APAR';
+  document.getElementById('apar-id').value=data?.ID||'';document.getElementById('apar-jenis').value=data?.Jenis||'CO2';
+  document.getElementById('apar-brand').value=data?.Brand||'';document.getElementById('apar-kap').value=data?.Kapasitas||'';
+  document.getElementById('apar-lok').value=data?.Lokasi_Label||'';document.getElementById('apar-cat').value=data?.Catatan||'';
+  document.getElementById('apar-isi').value=isoD(data?.Tgl_Isi);document.getElementById('apar-exp').value=isoD(data?.Tgl_Expired);
+  document.getElementById('apar-status').value=data?.Status||'Aktif';
+  clearFCoord('apar');
+  new bootstrap.Modal(document.getElementById('aparModal')).show();
+  document.getElementById('aparModal').addEventListener('shown.bs.modal',()=>{
+    const lat=data?.Lat?parseFloat(data.Lat):null,lng=data?.Lng?parseFloat(data.Lng):null;
+    initFMap('apar',lat,lng);if(lat&&lng)fillFCoord('apar',lat,lng);
+  },{once:true});
+}
+function editApar(d){openAparModal(d);}
+function saveApar(){
+  const data={ID:$v('apar-id')||null,Jenis:$v('apar-jenis'),Brand:$v('apar-brand'),Kapasitas:$v('apar-kap'),
+    Lokasi_Label:$v('apar-lok'),Tgl_Isi:$v('apar-isi'),Tgl_Expired:$v('apar-exp'),
+    Status:$v('apar-status'),Lat:$v('apar-lat'),Lng:$v('apar-lng'),Catatan:$v('apar-cat'),By:A.me?.Username||'system'};
+  if(!data.Jenis||!data.Lokasi_Label||!data.Tgl_Expired){toast('Lengkapi field wajib!','warning');return;}
+  api('saveApar',data).then(r=>{if(r&&r.ok===false){toast('Error: '+r.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('aparModal')).hide();toast('APAR disimpan!');loadApar();loadDashboard();A.mainData=null;}).catch(e=>toast('Error: '+e.message,'danger'));
+}
+function delApar(id){if(!confirm('Hapus APAR ini?'))return;api('deleteApar',{id}).then(()=>{toast('Dihapus');loadApar();loadDashboard();A.mainData=null;}).catch(e=>toast('Error: '+e.message,'danger'));}
+
+// ================================================================
+//  EQUIPMENT
+// ================================================================
+function equipEmoji(t){return{'Hydrant':'🚒','Alarm Kebakaran':'🔔','Sensor Asap':'💨','Sensor Api':'🔥','Tombol Alarm':'🔴','Sirine':'📢'}[t]||'⚙️';}
+function equipColor(t){return{'Hydrant':'#0066cc','Alarm Kebakaran':'#dc3545','Sensor Asap':'#6c757d','Sensor Api':'#e8821a','Tombol Alarm':'#c0392b','Sirine':'#8e44ad'}[t]||'#17a589';}
+function buildEquipTabs(){const tabs=document.getElementById('equip-tabs');A.equipTypes.forEach(t=>{const d=document.createElement('div');d.className='type-tab';d.textContent=equipEmoji(t)+' '+t;d.onclick=function(){filterEquip(t,this);};tabs.appendChild(d);});}
+function buildEquipTypeSelect(){const s=document.getElementById('equip-tipe');s.innerHTML='';A.equipTypes.forEach(t=>{s.innerHTML+=`<option value="${t}">${equipEmoji(t)} ${t}</option>`;});}
+function loadEquip(){api('getEquipList',{tipe:null}).then(l=>{A.equipAllList=l;renderEquip(l);}).catch(e=>toast('Error: '+e.message,'danger'));}
+function filterEquip(tipe,el){document.querySelectorAll('#equip-tabs .type-tab').forEach(t=>t.classList.remove('active'));if(el)el.classList.add('active');renderEquip(tipe?A.equipAllList.filter(e=>e.Tipe===tipe):A.equipAllList);}
+function renderEquip(list){
+  const now=new Date(),am=(parseInt(A.cfg.ALERT_DAYS)||30)*86400000;const tb=document.getElementById('equip-tbody');
+  if(!list.length){tb.innerHTML='<tr><td colspan="8" class="text-center text-muted py-4">Belum ada peralatan</td></tr>';return;}
+  tb.innerHTML=list.map(e=>{const ms=e.Tgl_Expired?(new Date(e.Tgl_Expired)-now):Infinity;const c=ms<0?'bs-exp':ms<am?'bs-near':'bs-ok',l=ms<0?'EXPIRED':ms<am?'Segera Exp':'Aktif';const ce=A.me.Role!=='operator';
+    return `<tr><td><small class="text-muted">${e.ID}</small></td><td><span class="badge" style="background:${equipColor(e.Tipe)};font-size:.72rem">${equipEmoji(e.Tipe)} ${e.Tipe}</span></td><td><b>${e.Nama}</b></td><td>${e.Lokasi_Label}</td><td>${fd(e.Tgl_Pasang)}</td><td>${e.Tgl_Expired?fd(e.Tgl_Expired):'—'}</td><td><span class="bs ${c}">${l}</span></td><td>${ce?`<button class="btn btn-xs btn-outline-primary me-1" onclick='editEquip(${JSON.stringify(e)})'><i class="fas fa-edit fa-xs"></i></button><button class="btn btn-xs btn-outline-danger" onclick="delEquip('${e.ID}')"><i class="fas fa-trash fa-xs"></i></button>`:''}<button class="btn btn-xs btn-outline-dark ms-1" onclick='openQrModal("equip",${JSON.stringify(e)})' title="QR Inspeksi Peralatan"><i class="fas fa-qrcode fa-xs"></i></button></td></tr>`;}).join('');
+}
+function openEquipModal(data){
+  document.getElementById('equip-mtitle').textContent=data?'Edit Peralatan':'Tambah Peralatan';
+  document.getElementById('equip-id').value=data?.ID||'';document.getElementById('equip-nama').value=data?.Nama||'';
+  document.getElementById('equip-lok').value=data?.Lokasi_Label||'';document.getElementById('equip-pasang').value=isoD(data?.Tgl_Pasang);
+  document.getElementById('equip-exp').value=isoD(data?.Tgl_Expired);document.getElementById('equip-cat').value=data?.Catatan||'';
+  document.getElementById('equip-status').value=data?.Status||'Aktif';
+  if(data&&document.getElementById('equip-tipe').options.length>0)document.getElementById('equip-tipe').value=data.Tipe;
+  clearFCoord('equip');
+  new bootstrap.Modal(document.getElementById('equipModal')).show();
+  document.getElementById('equipModal').addEventListener('shown.bs.modal',()=>{const lat=data?.Lat?parseFloat(data.Lat):null,lng=data?.Lng?parseFloat(data.Lng):null;initFMap('equip',lat,lng);if(lat&&lng)fillFCoord('equip',lat,lng);},{once:true});
+}
+function editEquip(d){openEquipModal(d);}
+function saveEquip(){
+  const data={ID:$v('equip-id')||null,Tipe:$v('equip-tipe'),Nama:$v('equip-nama'),Lokasi_Label:$v('equip-lok'),Tgl_Pasang:$v('equip-pasang'),Tgl_Expired:$v('equip-exp')||null,Status:$v('equip-status'),Lat:$v('equip-lat'),Lng:$v('equip-lng'),Catatan:$v('equip-cat'),By:A.me?.Username||'system'};
+  if(!data.Tipe||!data.Nama||!data.Lokasi_Label){toast('Lengkapi field wajib!','warning');return;}
+  api('saveEquip',data).then(r=>{if(r&&r.ok===false){toast('Error: '+r.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('equipModal')).hide();toast('Peralatan disimpan!');loadEquip();loadDashboard();A.mainData=null;}).catch(e=>toast('Error: '+e.message,'danger'));
+}
+function delEquip(id){if(!confirm('Hapus?'))return;api('deleteEquip',{id}).then(()=>{toast('Dihapus');loadEquip();loadDashboard();A.mainData=null;}).catch(e=>toast('Error: '+e.message,'danger'));}
+
+// ================================================================
+//  P3K
+// ================================================================
+function loadP3kLok(){api('getP3kLokasiList').then(l=>{A.p3kLok=l;renderP3kLok(l);}).catch(e=>toast('Error: '+e.message,'danger'));}
+function renderP3kLok(list){const el=document.getElementById('p3k-lok-list');if(!list.length){el.innerHTML='<div class="empty-st"><i class="fas fa-map-pin"></i>Belum ada lokasi P3K</div>';return;}el.innerHTML=list.map(l=>`<div class="ai" style="border-color:var(--blue);cursor:pointer;margin-bottom:6px;" onclick="selP3k('${l.ID}')"><i class="fas fa-kit-medical" style="color:var(--blue)"></i><div style="flex:1"><b style="font-size:.88rem">${l.Lokasi_Label}</b><div style="font-size:.72rem;color:#adb5bd">📍 ${l.Lat&&+l.Lat!==0?`${(+l.Lat).toFixed(5)}, ${(+l.Lng).toFixed(5)}`:'No GPS'}</div></div><div class="d-flex gap-1 align-items-center"><button class="btn btn-xs btn-outline-dark" onclick="event.stopPropagation();openQrModal('p3k',${JSON.stringify(l).replace(/"/g,'&quot;')})" title="QR Penggunaan P3K"><i class="fas fa-qrcode fa-xs"></i></button>${A.me.Role!=='operator'?`<button class="btn btn-xs btn-outline-secondary" onclick="event.stopPropagation();editP3kLok(${JSON.stringify(l).replace(/"/g,'&quot;')})"><i class="fas fa-edit fa-xs"></i></button><button class="btn btn-xs btn-outline-danger" onclick="event.stopPropagation();delP3kLok('${l.ID}')"><i class="fas fa-trash fa-xs"></i></button>`:''}</div></div>`).join('');}
+function openP3kLokModal(data){document.getElementById('p3klok-mtitle').textContent=data?'Edit Lokasi':'Tambah Lokasi P3K';document.getElementById('p3klok-id').value=data?.ID||'';document.getElementById('p3klok-lab').value=data?.Lokasi_Label||'';clearFCoord('p3klok');new bootstrap.Modal(document.getElementById('p3kLokModal')).show();document.getElementById('p3kLokModal').addEventListener('shown.bs.modal',()=>{const lat=data?.Lat?parseFloat(data.Lat):null,lng=data?.Lng?parseFloat(data.Lng):null;initFMap('p3klok',lat,lng);if(lat&&lng)fillFCoord('p3klok',lat,lng);},{once:true});}
+function editP3kLok(d){openP3kLokModal(d);}
+function saveP3kLok(){const data={ID:$v('p3klok-id')||null,Lokasi_Label:$v('p3klok-lab'),Lat:$v('p3klok-lat'),Lng:$v('p3klok-lng'),By:A.me?.Username||'system'};if(!data.Lokasi_Label){toast('Nama lokasi wajib!','warning');return;}api('saveP3kLokasi',data).then(r=>{if(r&&r.ok===false){toast('Error: '+r.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('p3kLokModal')).hide();toast('Disimpan!');loadP3kLok();loadDashboard();A.mainData=null;}).catch(e=>toast('Error: '+e.message,'danger'));}
+function delP3kLok(id){if(!confirm('Hapus lokasi & semua item P3K?'))return;api('deleteP3kLokasi',{id}).then(()=>{toast('Dihapus');loadP3kLok();loadDashboard();A.mainData=null;}).catch(e=>toast('Error: '+e.message,'danger'));}
+function selP3k(id){A.selectedP3k=A.p3kLok.find(l=>l.ID===id);document.getElementById('p3k-det-title').innerHTML=`<i class="fas fa-kit-medical me-2" style="color:var(--green)"></i>${A.selectedP3k.Lokasi_Label}`;document.getElementById('p3k-item-acts').style.display='flex';loadP3kItems(id);loadPemLog(id);}
+function loadP3kItems(id){api('getP3kItems',{p3kId:id}).then(items=>{A.p3kItems[id]=items;renderP3kItems(items);}).catch(e=>toast('Error: '+e.message,'danger'));}
+function renderP3kItems(items){const now=new Date(),am=(parseInt(A.cfg.ALERT_DAYS)||30)*86400000;const tb=document.getElementById('p3k-item-tbody');if(!items.length){tb.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">Belum ada item.</td></tr>';return;}tb.innerHTML=items.map(i=>{const ms=i.Tgl_Expired?(new Date(i.Tgl_Expired)-now):Infinity;const c=ms<0?'bs-exp':ms<am?'bs-near':'bs-ok',l=ms<0?'EXPIRED':ms<am?'Segera Exp':'OK';const low=parseInt(i.Stok_Saat_Ini)<=0,ce=A.me.Role!=='operator';return `<tr><td><b>${i.Nama_Item}</b></td><td>${i.Satuan}</td><td class="${low?'text-danger fw-bold':''}">${i.Stok_Saat_Ini}/${i.Stok_Awal}</td><td>${fd(i.Tgl_Expired)}</td><td><span class="bs ${c}">${l}</span>${low?' <span class="bs bs-low">HABIS</span>':''}</td><td>${ce?`<button class="btn btn-xs btn-outline-primary me-1" onclick='editP3kItem(${JSON.stringify(i)})'><i class="fas fa-edit fa-xs"></i></button><button class="btn btn-xs btn-outline-danger" onclick="delP3kItem('${i.ID}')"><i class="fas fa-trash fa-xs"></i></button>`:'—'}</td></tr>`;}).join('');}
+function openP3kItemModal(data){if(!A.selectedP3k)return;document.getElementById('p3kitem-mtitle').textContent=data?'Edit Item':'Tambah Item P3K';document.getElementById('p3kitem-id').value=data?.ID||'';document.getElementById('p3kitem-p3kid').value=A.selectedP3k.ID;document.getElementById('p3kitem-lok').value=A.selectedP3k.Lokasi_Label;document.getElementById('p3kitem-nama').value=data?.Nama_Item||'';document.getElementById('p3kitem-sat').value=data?.Satuan||'';document.getElementById('p3kitem-sa').value=data?.Stok_Awal||1;document.getElementById('p3kitem-si').value=data?.Stok_Saat_Ini||1;document.getElementById('p3kitem-exp').value=isoD(data?.Tgl_Expired);new bootstrap.Modal(document.getElementById('p3kItemModal')).show();}
+function editP3kItem(d){openP3kItemModal(d);}
+function saveP3kItem(){const data={ID:$v('p3kitem-id')||null,P3K_ID:$v('p3kitem-p3kid'),Lokasi_Label:$v('p3kitem-lok'),Nama_Item:$v('p3kitem-nama'),Satuan:$v('p3kitem-sat'),Stok_Awal:$v('p3kitem-sa'),Stok_Saat_Ini:$v('p3kitem-si'),Tgl_Expired:$v('p3kitem-exp'),By:A.me?.Username||'system'};if(!data.Nama_Item||!data.Satuan||!data.Tgl_Expired){toast('Lengkapi field wajib!','warning');return;}api('saveP3kItem',data).then(r=>{if(r&&r.ok===false){toast('Error: '+r.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('p3kItemModal')).hide();toast('Disimpan!');loadP3kItems(data.P3K_ID);loadDashboard();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function delP3kItem(id){if(!confirm('Hapus?'))return;api('deleteP3kItem',{id}).then(()=>{toast('Dihapus');loadP3kItems(A.selectedP3k.ID);loadDashboard();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function openPemModal(){if(!A.selectedP3k)return;const items=A.p3kItems[A.selectedP3k.ID]||[];const s=document.getElementById('pem-item');s.innerHTML='<option value="">— Pilih Item —</option>'+items.map(i=>`<option value="${i.ID}" data-stok="${i.Stok_Saat_Ini}" data-sat="${i.Satuan}" data-nama="${i.Nama_Item}">${i.Nama_Item} (Stok: ${i.Stok_Saat_Ini} ${i.Satuan})</option>`).join('');document.getElementById('pem-p3kid').value=A.selectedP3k.ID;document.getElementById('pem-lok').value=A.selectedP3k.Lokasi_Label;document.getElementById('pem-jml').value=1;document.getElementById('pem-tgl').value=todayISO();document.getElementById('pem-ket').value='';document.getElementById('pem-stok').textContent='';new bootstrap.Modal(document.getElementById('pemModal')).show();}
+function onPemItem(){const o=document.getElementById('pem-item').selectedOptions[0];document.getElementById('pem-stok').textContent=o?.dataset?.stok!=null?`Stok tersedia: ${o.dataset.stok} ${o.dataset.sat}`:'.';}
+function savePem(){const s=document.getElementById('pem-item'),o=s.selectedOptions[0],jml=+$v('pem-jml');if(!s.value||!jml){toast('Pilih item & jumlah!','warning');return;}if(jml>+o.dataset.stok){toast('Stok tidak cukup!','warning');return;}const data={P3K_ID:$v('pem-p3kid'),Item_ID:s.value,Nama_Item:o.dataset.nama,Lokasi_Label:$v('pem-lok'),Satuan:o.dataset.sat,Jumlah:jml,Tgl_Pemakaian:$v('pem-tgl'),Keterangan:$v('pem-ket'),By:A.me?.Username||'system'};api('recordPemakaian',data).then(r=>{if(r&&r.ok===false){toast('Error: '+r.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('pemModal')).hide();toast('Dicatat!');loadP3kItems(data.P3K_ID);loadPemLog(data.P3K_ID);loadDashboard();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function loadPemLog(id){document.getElementById('pem-section').style.display='block';api('getPemakaianLog',{p3kId:id}).then(logs=>{const el=document.getElementById('pem-log');if(!logs.length){el.innerHTML='<div class="text-muted text-center py-2" style="font-size:.8rem">Belum ada log</div>';return;}el.innerHTML=logs.map(l=>`<div style="padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:.8rem;display:flex;gap:8px;"><span style="color:#adb5bd;min-width:76px">${fd(l.Tgl_Pemakaian)}</span><span><b>${l.Nama_Item}</b> — ${l.Jumlah} ${l.Satuan||''}</span><span style="color:#adb5bd;margin-left:auto">${l.By||''}</span></div>`).join('');}).catch(()=>{});}
+
+// ================================================================
+//  INSPEKSI
+// ================================================================
+function loadInspeksi(){api('getInspeksiList',{tipe:null}).then(l=>{A.inspList=l;renderInspeksi(l);}).catch(e=>toast('Error: '+e.message,'danger'));}
+function filterInspeksi(tipe,el){document.querySelectorAll('#view-inspeksi .type-tab').forEach(t=>t.classList.remove('active'));if(el)el.classList.add('active');renderInspeksi(tipe?A.inspList.filter(i=>i.Tipe_Form===tipe):A.inspList);}
+function renderInspeksi(list){const tb=document.getElementById('insp-tbody');if(!list.length){tb.innerHTML='<tr><td colspan="7" class="text-center text-muted py-4">Belum ada data inspeksi</td></tr>';return;}tb.innerHTML=list.map(i=>`<tr><td>${fd(i.Tgl_Inspeksi)}</td><td><span class="badge" style="background:var(--navy);font-size:.7rem">${i.Tipe_Form}</span></td><td><b>${i.Aset_Nama}</b></td><td>${i.Lokasi_Label}</td><td>${i.Inspektor}</td><td><span class="bs ${i.Status_Akhir==='LULUS'?'bs-pass':i.Status_Akhir==='PERLU PERBAIKAN'?'bs-fix':'bs-fail'}">${i.Status_Akhir}</span></td><td><button class="btn btn-xs btn-outline-primary me-1" onclick="showInspDetail('${i.ID}')"><i class="fas fa-eye fa-xs"></i></button>${A.me.Role!=='operator'?`<button class="btn btn-xs btn-outline-danger" onclick="delInspeksi('${i.ID}')"><i class="fas fa-trash fa-xs"></i></button>`:''}</td></tr>`).join('');}
+function openInspModal(){document.getElementById('insp-tipe').value='';document.getElementById('insp-aset').innerHTML='<option value="">— Pilih Aset —</option>';document.getElementById('insp-inspektor').value=A.me?.Nama||'';document.getElementById('insp-tgl').value=todayISO();document.getElementById('insp-cl-wrap').style.display='none';document.getElementById('insp-submit-btn').style.display='none';document.getElementById('insp-cat').value='';new bootstrap.Modal(document.getElementById('inspModal')).show();}
+function onInspTipe(){const tipe=$v('insp-tipe'),sel=document.getElementById('insp-aset');sel.innerHTML='<option value="">— Memuat… —</option>';document.getElementById('insp-cl-wrap').style.display='none';document.getElementById('insp-submit-btn').style.display='none';if(tipe==='APAR'){api('getAparList').then(list=>{sel.innerHTML='<option value="">— Pilih APAR —</option>'+list.map(a=>`<option value="${a.ID}|${a.Jenis} ${a.Brand||''}|${a.Lokasi_Label}">${a.Jenis} ${a.Brand||''} — ${a.Lokasi_Label}</option>`).join('');sel.onchange=()=>renderChecklist('APAR');}).catch(()=>{});}else if(tipe==='HYDRANT'){api('getEquipList',{tipe:null}).then(list=>{const hy=list.filter(e=>e.Tipe==='Hydrant');sel.innerHTML='<option value="">— Pilih Hydrant —</option>'+hy.map(e=>`<option value="${e.ID}|${e.Nama}|${e.Lokasi_Label}">${e.Nama} — ${e.Lokasi_Label}</option>`).join('');sel.onchange=()=>renderChecklist('HYDRANT');}).catch(()=>{});}else if(tipe==='P3K'){api('getP3kLokasiList').then(list=>{sel.innerHTML='<option value="">— Pilih Kotak P3K —</option>'+list.map(l=>`<option value="${l.ID}|${l.Lokasi_Label}|${l.Lokasi_Label}">${l.Lokasi_Label}</option>`).join('');sel.onchange=()=>renderChecklist('P3K');}).catch(()=>{});}}
+function renderChecklist(clType){if(!$v('insp-aset'))return;const cl=A.checklistDef[clType]||[];document.getElementById('insp-cl-wrap').style.display='block';document.getElementById('insp-submit-btn').style.display='inline-block';document.getElementById('insp-cl-list').innerHTML=cl.map((item,idx)=>`<div class="ck-item"><div class="ck-label">${idx+1}. ${item.label}</div><div class="ck-opts"><label class="ck-opt"><input type="radio" name="ck-${idx}" value="OK" checked><span class="ok-lbl ms-1">OK</span></label><label class="ck-opt ms-2"><input type="radio" name="ck-${idx}" value="NG"><span class="ng-lbl ms-1">NG</span></label><label class="ck-opt ms-2"><input type="radio" name="ck-${idx}" value="NA"><span class="na-lbl ms-1">N/A</span></label></div><input type="text" class="form-control form-control-sm mt-1" id="ckn-${idx}" placeholder="Catatan item…" style="width:100%;font-size:.78rem;"></div>`).join('');}
+function saveInspeksi(){const tipe=$v('insp-tipe'),asetVal=$v('insp-aset'),inspektor=$v('insp-inspektor'),tgl=$v('insp-tgl');if(!tipe||!asetVal||!inspektor||!tgl){toast('Lengkapi semua field!','warning');return;}const parts=asetVal.split('|');const clType=tipe==='HYDRANT'?'HYDRANT':tipe;const cl=A.checklistDef[clType]||[];const clItems=cl.map((item,idx)=>{let nilai='OK';document.querySelectorAll(`input[name="ck-${idx}"]`).forEach(r=>{if(r.checked)nilai=r.value;});return{id:item.id,label:item.label,nilai,catatan:document.getElementById('ckn-'+idx)?.value||''};});const data={Tipe_Form:tipe,Aset_ID:parts[0],Aset_Nama:parts[1]||'',Lokasi_Label:parts[2]||'',Tgl_Inspeksi:tgl,Inspektor:inspektor,Checklist_JSON:JSON.stringify(clItems),Catatan:$v('insp-cat'),By:A.me?.Username||'system'};api('saveInspeksi',data).then(res=>{if(res&&res.ok===false){toast('Error: '+res.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('inspModal')).hide();toast(`Inspeksi disimpan! Status: ${res.Status}`);loadInspeksi();loadDashboard();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function showInspDetail(id){const rec=A.inspList.find(i=>i.ID===id);if(!rec)return;let cl=[];try{cl=JSON.parse(rec.Checklist_JSON||'[]');}catch(e){}const sc={'LULUS':'#28a745','PERLU PERBAIKAN':'#ffc107','TIDAK LULUS':'#dc3545'}[rec.Status_Akhir]||'#6c757d';let html=`<div style="padding:16px;"><div class="row g-2 mb-3"><div class="col-6"><b>Tipe:</b> ${rec.Tipe_Form}</div><div class="col-6"><b>Aset:</b> ${rec.Aset_Nama}</div><div class="col-6"><b>Lokasi:</b> ${rec.Lokasi_Label}</div><div class="col-6"><b>Tanggal:</b> ${fd(rec.Tgl_Inspeksi)}</div><div class="col-6"><b>Inspektor:</b> ${rec.Inspektor}</div><div class="col-6"><b>Status:</b> <span style="color:${sc};font-weight:700">${rec.Status_Akhir}</span></div></div><hr><table class="table table-sm" style="font-size:.84rem;"><thead><tr><th>#</th><th>Item Pemeriksaan</th><th style="width:80px">Hasil</th><th>Catatan</th></tr></thead><tbody>`;cl.forEach((item,i)=>{const c=item.nilai==='OK'?'#28a745':item.nilai==='NG'?'#dc3545':'#6c757d';html+=`<tr><td>${i+1}</td><td>${item.label}</td><td style="color:${c};font-weight:700">${item.nilai}</td><td>${item.catatan||'—'}</td></tr>`;});html+=`</tbody></table>${rec.Catatan?`<div class="mt-2"><b>Catatan Umum:</b> ${rec.Catatan}</div>`:''}</div>`;document.getElementById('insp-detail-body').innerHTML=html;new bootstrap.Modal(document.getElementById('inspDetailModal')).show();}
+function delInspeksi(id){if(!confirm('Hapus?'))return;api('deleteInspeksi',{id}).then(()=>{toast('Dihapus');loadInspeksi();}).catch(e=>toast('Error: '+e.message,'danger'));}
+
+// ================================================================
+//  FORM MAP ENGINE
+// ================================================================
+function initFMap(id,existLat,existLng){
+  const cfg=A.cfg,lat=parseFloat(cfg.MAP_CENTER_LAT)||-6.2088,lng=parseFloat(cfg.MAP_CENTER_LNG)||106.8456,zoom=parseInt(cfg.MAP_ZOOM)||18;
+  if(A.fmaps[id]){A.fmaps[id].invalidateSize();if(existLat&&existLng){A.fmaps[id].setView([existLat,existLng],zoom);placeFPin(id,existLat,existLng);}return;}
+  const m=L.map(id+'-fmap').setView(existLat?[existLat,existLng]:[lat,lng],zoom);mkTile('satellite').addTo(m);A.fmaps[id]=m;A.flayers[id]='satellite';
+  m.on('click',e=>placeFPin(id,e.latlng.lat,e.latlng.lng));
+  if(existLat&&existLng)placeFPin(id,existLat,existLng);
+}
+function placeFPin(id,lat,lng){lat=parseFloat(lat);lng=parseFloat(lng);const m=A.fmaps[id];if(!m)return;if(A.fmarkers[id]){A.fmarkers[id].setLatLng([lat,lng]);}else{const mk=L.marker([lat,lng],{draggable:true,icon:L.divIcon({className:'',iconSize:[28,40],iconAnchor:[14,40],html:'<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#e8821a;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);"></div>'})}).addTo(m);mk.on('drag',e=>fillFCoord(id,e.latlng.lat,e.latlng.lng));mk.on('dragend',e=>fillFCoord(id,e.latlng.lat,e.latlng.lng));A.fmarkers[id]=mk;}fillFCoord(id,lat,lng);m.panTo([lat,lng]);}
+function fillFCoord(id,lat,lng){const ls=lat.toFixed(7),gs=lng.toFixed(7);document.getElementById(id+'-lat').value=ls;document.getElementById(id+'-lng').value=gs;const ld=document.getElementById(id+'-lat-disp'),gd=document.getElementById(id+'-lng-disp');if(ld){ld.textContent=ls;ld.classList.add('has-val');}if(gd){gd.textContent=gs;gd.classList.add('has-val');}const hint=document.getElementById(id+'-map-hint');if(hint){hint.textContent=`✅ ${parseFloat(ls).toFixed(5)}, ${parseFloat(gs).toFixed(5)}`;hint.classList.add('has-coord');}const wrap=document.getElementById(id+'-map-wrap');if(wrap)wrap.style.borderColor='#28a745';}
+function clearFCoord(id){document.getElementById(id+'-lat').value='';document.getElementById(id+'-lng').value='';const ld=document.getElementById(id+'-lat-disp'),gd=document.getElementById(id+'-lng-disp');if(ld){ld.textContent='—';ld.classList.remove('has-val');}if(gd){gd.textContent='—';gd.classList.remove('has-val');}if(A.fmarkers[id]){A.fmaps[id].removeLayer(A.fmarkers[id]);delete A.fmarkers[id];}const hint=document.getElementById(id+'-map-hint');if(hint){hint.textContent='🎯 Klik titik lokasi pada peta satelit';hint.classList.remove('has-coord');}const wrap=document.getElementById(id+'-map-wrap');if(wrap)wrap.style.borderColor='';/* [GPS PATCH] clear accuracy circle */if(A.gpsCircles[id]&&A.fmaps[id]){A.fmaps[id].removeLayer(A.gpsCircles[id]);delete A.gpsCircles[id];}/* [GPS PATCH] clear accuracy info */const accInfo=document.getElementById(id+'-accuracy-info');if(accInfo){accInfo.style.display='none';accInfo.className='gps-accuracy-info';accInfo.innerHTML='';}}
+function switchFLayer(id,type){const m=A.fmaps[id];if(!m||A.flayers[id]===type)return;m.eachLayer(l=>{if(l instanceof L.TileLayer)m.removeLayer(l);});mkTile(type).addTo(m);A.flayers[id]=type;document.getElementById(id+'-btn-sat').classList.toggle('active',type==='satellite');document.getElementById(id+'-btn-str').classList.toggle('active',type==='street');}
+
+
+// ================================================================
+//  GPS HIGH PRECISION — AMBIL LOKASI SAYA
+//  Fungsi reusable: getCurrentLocation(type)
+//  type = 'apar' | 'equip' | 'p3klok'
+// ================================================================
+
+/**
+ * getCurrentLocation(type)
+ * Ambil lokasi GPS dengan akurasi tinggi.
+ * Max 3 percobaan, pilih hasil dengan akurasi (meter) terkecil.
+ * Jika semua timeout, fallback ke watchPosition.
+ */
+async function getCurrentLocation(type){
+  if(!navigator.geolocation){toast('Browser tidak mendukung GPS / Geolocation.','danger');return;}
+  const btn=document.getElementById(type+'-gps-btn');
+
+  // Cek status izin GPS lebih dulu (jika browser mendukung Permissions API).
+  // Tujuannya: beri pesan yang jelas jika izin sudah ditolak permanen,
+  // alih-alih membiarkan prompt gagal diam-diam atau muncul berulang.
+  if(navigator.permissions && navigator.permissions.query){
+    try{
+      const status = await navigator.permissions.query({name:'geolocation'});
+      if(status.state === 'denied'){
+        toast('Izin lokasi diblokir di browser. Buka Site Settings > Location untuk mengizinkan kembali.','danger');
+        return;
+      }
+    }catch(e){ /* Permissions API tidak didukung penuh, lanjut seperti biasa */ }
+  }
+
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Mengambil...';}
+  toast('Sedang mendapatkan lokasi GPS dengan akurasi tinggi...','info');
+  const gpsOpts={enableHighAccuracy:true,timeout:30000,maximumAge:0};
+  let bestResult=null,attemptCount=0;
+  const MAX_ATTEMPTS=3,GOOD_ACCURACY=10;
+  function doAttempt(){
+    attemptCount++;
+    navigator.geolocation.getCurrentPosition(
+      function(pos){
+        const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=pos.coords.accuracy;
+        if(!bestResult||acc<bestResult.accuracy)bestResult={lat:lat,lng:lng,accuracy:acc};
+        if(acc>GOOD_ACCURACY&&attemptCount<MAX_ATTEMPTS){setTimeout(doAttempt,1500);}
+        else{_onGpsSuccess(type,bestResult.lat,bestResult.lng,bestResult.accuracy,btn);}
+      },
+      function(err){_onGpsError(type,err,btn,bestResult);},
+      gpsOpts
+    );
+  }
+  doAttempt();
+}
+
+/** Dipanggil setelah GPS berhasil mendapatkan koordinat terbaik */
+function _onGpsSuccess(type,lat,lng,accuracy,btn){
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-location-crosshairs"></i> Ambil Lokasi';}
+  placeFPin(type,lat,lng);
+  updateLocationMarker(type,lat,lng);
+  drawAccuracyCircle(type,lat,lng,accuracy);
+  showAccuracyInfo(type,accuracy);
+  const accStr=accuracy<1?accuracy.toFixed(2):Math.round(accuracy);
+  toast('Lokasi GPS diperoleh! Akurasi: +/-'+accStr+' meter','success');
+}
+
+/** Penanganan error per kode — fallback watchPosition jika timeout */
+function _onGpsError(type,err,btn,bestResult){
+  if(bestResult){_onGpsSuccess(type,bestResult.lat,bestResult.lng,bestResult.accuracy,btn);return;}
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-location-crosshairs"></i> Ambil Lokasi';}
+  if(err.code===1){toast('Izin lokasi ditolak. Aktifkan GPS dan izinkan browser mengakses lokasi.','danger');}
+  else if(err.code===2){toast('Lokasi tidak tersedia. Pastikan GPS aktif pada perangkat.','danger');}
+  else if(err.code===3){toast('Timeout. Mencoba watchPosition sebagai fallback...','warning');_fallbackWatch(type,btn);}
+  else{toast('Gagal mendapatkan lokasi GPS. Klik peta untuk menentukan titik lokasi secara manual.','danger');}
+}
+
+/**
+ * Fallback: watchPosition selama max 15 detik.
+ * Ambil hasil dengan akurasi terkecil, lalu clearWatch.
+ */
+function _fallbackWatch(type,btn){
+  let bestWatch=null,watchId=null,watchTimeout=null;
+  const gpsOpts={enableHighAccuracy:true,timeout:15000,maximumAge:0};
+  watchId=navigator.geolocation.watchPosition(
+    function(pos){
+      const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=pos.coords.accuracy;
+      if(!bestWatch||acc<bestWatch.accuracy)bestWatch={lat:lat,lng:lng,accuracy:acc};
+      if(acc<=10){clearTimeout(watchTimeout);navigator.geolocation.clearWatch(watchId);_onGpsSuccess(type,bestWatch.lat,bestWatch.lng,bestWatch.accuracy,btn);}
+    },
+    function(){
+      clearTimeout(watchTimeout);navigator.geolocation.clearWatch(watchId);
+      if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-location-crosshairs"></i> Ambil Lokasi';}
+      toast('Gagal mendapatkan lokasi GPS. Klik peta untuk menentukan titik lokasi secara manual.','danger');
+    },
+    gpsOpts
+  );
+  watchTimeout=setTimeout(function(){
+    navigator.geolocation.clearWatch(watchId);
+    if(bestWatch){_onGpsSuccess(type,bestWatch.lat,bestWatch.lng,bestWatch.accuracy,btn);}
+    else{
+      if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-location-crosshairs"></i> Ambil Lokasi';}
+      toast('Tidak dapat memperoleh lokasi. Klik peta untuk menentukan titik lokasi secara manual.','warning');
+    }
+  },15000);
+}
+
+/**
+ * updateLocationMarker(type, lat, lng)
+ * Geser marker dan zoom peta form ke posisi pengguna (zoom 20).
+ */
+function updateLocationMarker(type,lat,lng){
+  const m=A.fmaps[type];
+  if(!m)return;
+  m.setView([lat,lng],21);
+  if(A.fmarkers[type])A.fmarkers[type].setLatLng([lat,lng]);
+}
+
+/**
+ * drawAccuracyCircle(type, lat, lng, accuracy)
+ * Gambar lingkaran radius akurasi GPS (biru transparan).
+ * Hapus lingkaran lama sebelum menggambar yang baru.
+ */
+function drawAccuracyCircle(type,lat,lng,accuracy){
+  const m=A.fmaps[type];
+  if(!m)return;
+  if(A.gpsCircles[type]){m.removeLayer(A.gpsCircles[type]);}
+  A.gpsCircles[type]=L.circle([lat,lng],{
+    radius:accuracy,
+    color:'#3498db',
+    fillColor:'#3498db',
+    fillOpacity:0.15,
+    weight:2
+  }).addTo(m);
+}
+
+/**
+ * showAccuracyInfo(type, accuracy)
+ * Tampilkan info akurasi GPS di bawah koordinat dengan warna:
+ * Hijau < 5m | Kuning 5-15m | Merah > 15m
+ */
+function showAccuracyInfo(type,accuracy){
+  const el=document.getElementById(type+'-accuracy-info');
+  if(!el)return;
+  el.style.display='flex';
+  el.className='gps-accuracy-info';
+  let cls,icon,label;
+  if(accuracy<5){cls='gps-acc-good';icon='<span style="width:10px;height:10px;border-radius:50%;background:#28a745;display:inline-block;flex-shrink:0;"></span>';label='Sangat Akurat';}
+  else if(accuracy<=15){cls='gps-acc-warn';icon='<span style="width:10px;height:10px;border-radius:50%;background:#ffc107;display:inline-block;flex-shrink:0;"></span>';label='Akurasi Sedang';}
+  else{cls='gps-acc-bad';icon='<span style="width:10px;height:10px;border-radius:50%;background:#dc3545;display:inline-block;flex-shrink:0;"></span>';label='Akurasi Rendah';}
+  el.classList.add(cls);
+  const accStr=accuracy<1?accuracy.toFixed(2):Math.round(accuracy);
+  el.innerHTML=icon+' <b>GPS Accuracy: +/-'+accStr+' meter</b> <span style="font-weight:400;opacity:.8;">('+label+')</span>';
+}
+
+// ================================================================
+//  PETA UTAMA
+//  FIX 4: placeMainMarkers — gunakan m.lat !== undefined, bukan !m.lat
+//  (karena !(-6.xxx) = false tapi koordinat negatif valid)
+// ================================================================
+function initMainMap(){loadConfig(()=>{const lat=parseFloat(A.cfg.MAP_CENTER_LAT)||-6.2088,lng=parseFloat(A.cfg.MAP_CENTER_LNG)||106.8456,zoom=parseInt(A.cfg.MAP_ZOOM)||18;if(!A.lmap){A.lmap=L.map('lmap').setView([lat,lng],zoom);mkTile('satellite').addTo(A.lmap);A.mainLayer='satellite';}else{A.lmap.invalidateSize();}reloadMainMap();});}
+function reloadMainMap(){if(!A.lmap)return;toast('Memuat peta...','info');api('getAllMapMarkers').then(data=>{A.mainData=data;placeMainMarkers(data.markers,data.center,data.zoom);}).catch(e=>toast('Error peta: '+e.message,'danger'));}
+function refreshMainMarkers(){if(A.mainData)placeMainMarkers(A.mainData.markers,A.mainData.center,A.mainData.zoom);}
+function switchMainLayer(type){if(!A.lmap||A.mainLayer===type)return;A.lmap.eachLayer(l=>{if(l instanceof L.TileLayer)A.lmap.removeLayer(l);});mkTile(type).addTo(A.lmap);A.mainLayer=type;document.getElementById('btn-sat').classList.toggle('active',type==='satellite');document.getElementById('btn-str').classList.toggle('active',type==='street');}
+function mColor(m){if(m.type==='P3K')return'#3498db';if(m.type==='EQUIP'&&m.tipe==='Hydrant')return'#0066cc';if(m.type==='EQUIP')return'#17a589';return m.color==='red'?'#dc3545':m.color==='orange'?'#ffa500':'#e8821a';}
+function mEmoji(m){if(m.type==='APAR')return'🧯';if(m.type==='P3K')return'🏥';return{'Hydrant':'🚒','Alarm Kebakaran':'🔔','Sensor Asap':'💨','Sensor Api':'🔥','Tombol Alarm':'🔴','Sirine':'📢'}[m.tipe]||'⚙️';}
+function mDivIcon(color,emoji){return L.divIcon({className:'',iconSize:[32,44],iconAnchor:[16,44],popupAnchor:[0,-44],html:`<div style="display:flex;flex-direction:column;align-items:center;"><div style="width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid rgba(255,255,255,.85);box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);font-size:13px;line-height:1;">${emoji}</span></div></div>`});}
+
+function placeMainMarkers(markers, center, zoom){
+  if(!A.lmap) return;
+  A.mainMarkers.forEach(m=>A.lmap.removeLayer(m));
+  A.mainMarkers=[];
+  const showApar=document.getElementById('show-apar').checked;
+  const showHyd =document.getElementById('show-hydrant').checked;
+  const showEq  =document.getElementById('show-equip').checked;
+  const showP3k =document.getElementById('show-p3k').checked;
+
+  markers.forEach(m=>{
+    // FIX 4: cek dengan isFinite, bukan !m.lat (koordinat negatif valid!)
+    if(m.lat==null||m.lng==null||!isFinite(m.lat)||!isFinite(m.lng)) return;
+    if(m.type==='APAR'&&!showApar) return;
+    if(m.type==='P3K'&&!showP3k) return;
+    if(m.type==='EQUIP'&&m.tipe==='Hydrant'&&!showHyd) return;
+    if(m.type==='EQUIP'&&m.tipe!=='Hydrant'&&!showEq) return;
+    const mk=L.marker([m.lat,m.lng],{icon:mDivIcon(mColor(m),mEmoji(m))});
+    mk.bindPopup(m.info,{maxWidth:280});
+    mk.addTo(A.lmap);
+    A.mainMarkers.push(mk);
+  });
+
+  if(A.mainMarkers.length>0){
+    try{A.lmap.fitBounds(L.featureGroup(A.mainMarkers).getBounds().pad(0.15));}
+    catch(e){if(center?.lat)A.lmap.setView([center.lat,center.lng],zoom||18);}
+  } else if(center?.lat){
+    A.lmap.setView([center.lat,center.lng],zoom||18);
+  }
+  setTimeout(()=>{if(A.lmap)A.lmap.invalidateSize();},300);
+}
+
+// ================================================================
+//  GANTI PASSWORD
+// ================================================================
+function doChangePass(){const oldP=$v('cp-old'),newP=$v('cp-new'),conf=$v('cp-confirm');const msg=document.getElementById('cp-msg');if(!oldP||!newP){msg.innerHTML='<div class="alert alert-warning">Wajib diisi!</div>';return;}if(newP.length<6){msg.innerHTML='<div class="alert alert-warning">Min 6 karakter!</div>';return;}if(newP!==conf){msg.innerHTML='<div class="alert alert-danger">Konfirmasi tidak cocok!</div>';return;}const token=sessionStorage.getItem('hse_token');api('changePassword',{oldPass:oldP,newPass:newP}).then(res=>{if(res.ok){msg.innerHTML='<div class="alert alert-success">Password berhasil diubah!</div>';['cp-old','cp-new','cp-confirm'].forEach(id=>document.getElementById(id).value='');}else{msg.innerHTML=`<div class="alert alert-danger">${res.msg}</div>`;}}).catch(e=>{msg.innerHTML=`<div class="alert alert-danger">Error: ${e.message}</div>`;});}
+
+// ================================================================
+//  ADMIN
+// ================================================================
+function loadAdmin(){loadConfig(()=>{document.getElementById('cfg-lat').value=A.cfg.MAP_CENTER_LAT||'-6.2088';document.getElementById('cfg-lng').value=A.cfg.MAP_CENTER_LNG||'106.8456';document.getElementById('cfg-zoom').value=A.cfg.MAP_ZOOM||18;document.getElementById('cfg-days').value=A.cfg.ALERT_DAYS||30;document.getElementById('cfg-admin').value=A.cfg.ADMIN_EMAIL||'';document.getElementById('cfg-rep').value=A.cfg.REPORT_EMAILS||'';});}
+function admTab(name,el){document.querySelectorAll('#adm-tabs .nav-link').forEach(l=>l.classList.remove('active'));el.classList.add('active');['settings','users','notif'].forEach(n=>document.getElementById('adm-'+n).style.display=n===name?'':'none');if(name==='users')loadUsers();}
+function saveSettings(){api('saveMultiConfig',{MAP_CENTER_LAT:$v('cfg-lat'),MAP_CENTER_LNG:$v('cfg-lng'),MAP_ZOOM:$v('cfg-zoom'),ALERT_DAYS:$v('cfg-days'),ADMIN_EMAIL:$v('cfg-admin'),REPORT_EMAILS:$v('cfg-rep')}).then(()=>{toast('Disimpan!');loadConfig();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function loadConfig(cb){api('getConfig').then(c=>{A.cfg=c;if(cb)cb();}).catch(()=>{if(cb)cb();});}
+function loadUsers(){api('getUsers').then(users=>{const tb=document.getElementById('users-tbody');if(!users.length){tb.innerHTML='<tr><td colspan="6" class="text-center text-muted py-3">Belum ada pengguna</td></tr>';return;}tb.innerHTML=users.map(u=>`<tr><td><b>${u.Username}</b></td><td>${u.Nama}</td><td><span class="badge bg-secondary">${u.Role}</span></td><td>${u.Aktif===true||u.Aktif==='TRUE'?'<span class="badge bg-success">Aktif</span>':'<span class="badge bg-secondary">Nonaktif</span>'}</td><td>${u.Email||'<span class="text-danger">—</span>'}</td><td><button class="btn btn-xs btn-outline-primary me-1" onclick='editUser(${JSON.stringify(u)})'><i class="fas fa-edit fa-xs"></i></button>${u.Username!=='admin'?`<button class="btn btn-xs btn-outline-danger" onclick="delUser('${u.ID}')"><i class="fas fa-trash fa-xs"></i></button>`:''}</td></tr>`).join('');}).catch(e=>toast('Error: '+e.message,'danger'));}
+function openUserModal(){document.getElementById('user-mtitle').textContent='Tambah Pengguna';['user-id','user-uname','user-nama','user-pass','user-email'].forEach(id=>document.getElementById(id).value='');document.getElementById('user-role').value='operator';document.getElementById('user-aktif').checked=true;document.getElementById('user-uname').disabled=false;new bootstrap.Modal(document.getElementById('userModal')).show();}
+function editUser(u){document.getElementById('user-mtitle').textContent='Edit Pengguna';document.getElementById('user-id').value=u.ID||'';document.getElementById('user-uname').value=u.Username;document.getElementById('user-uname').disabled=true;document.getElementById('user-nama').value=u.Nama;document.getElementById('user-role').value=u.Role;document.getElementById('user-pass').value='';document.getElementById('user-email').value=u.Email||'';document.getElementById('user-aktif').checked=u.Aktif===true||u.Aktif==='TRUE';new bootstrap.Modal(document.getElementById('userModal')).show();}
+function saveUser(){const data={ID:$v('user-id')||null,Username:$v('user-uname'),Nama:$v('user-nama'),Role:$v('user-role'),Password:$v('user-pass')||null,Email:$v('user-email'),Aktif:document.getElementById('user-aktif').checked};if(!data.Username||!data.Nama){toast('Username & nama wajib!','warning');return;}api('saveUser',data).then(r=>{if(r&&r.ok===false){toast('Error: '+r.msg,'danger');return;}bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();toast('Disimpan!');loadUsers();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function delUser(id){if(!confirm('Hapus?'))return;api('deleteUser',{id}).then(()=>{toast('Dihapus');loadUsers();}).catch(e=>toast('Error: '+e.message,'danger'));}
+function setupTriggers(){api('setupTriggers').then(()=>{document.getElementById('trg-msg').innerHTML='<div class="alert alert-success mt-2"><i class="fas fa-check me-2"></i>Trigger diaktifkan!</div>';}).catch(e=>{document.getElementById('trg-msg').innerHTML=`<div class="alert alert-danger mt-2">Error: ${e.message}</div>`;});}
+function testAlert(){toast('Mengirim...','info');api('testAlert').then(()=>toast('Terkirim!')).catch(e=>toast('Error: '+e.message,'danger'));}
+function testReport(){toast('Mengirim...','info');api('testReport').then(()=>toast('Terkirim!')).catch(e=>toast('Error: '+e.message,'danger'));}
+
+// ================================================================
+//  UTILS
+// ================================================================
+function sv(id,val){const e=document.getElementById(id);if(e)e.textContent=(val!==undefined&&val!==null)?val:0;}
+function $v(id){const e=document.getElementById(id);return e?e.value:'';}
+function isoD(d){if(!d)return'';try{const x=new Date(d);return isNaN(x)?'':x.toISOString().substring(0,10);}catch(e){return'';}}
+function toast(msg,type='success'){const c={success:'#28a745',danger:'#dc3545',warning:'#e8821a',info:'#17a589'};const el=document.getElementById('app-toast');el.style.background=c[type]||c.success;document.getElementById('toast-msg').textContent=msg;bootstrap.Toast.getOrCreateInstance(el,{delay:3500}).show();}
+// ── SCAN: Load aset data async ketika halaman dibuka via QR ──────
+function loadScanData(){
+  if(!_SCAN_TYPE||!_SCAN_ID){
+    document.getElementById('scan-body').innerHTML='<div class="alert alert-danger m-4">Parameter scan tidak valid.</div>';
+    return;
+  }
+  const action = _SCAN_TYPE==='apar' ? 'getScanApar'
+               : _SCAN_TYPE==='equip' ? 'getScanEquip'
+               : _SCAN_TYPE==='p3k'   ? 'getScanP3k'
+               : null;
+  if(!action){
+    document.getElementById('scan-body').innerHTML='<div class="alert alert-danger m-4">Tipe scan tidak dikenal: '+_SCAN_TYPE+'</div>';
+    return;
+  }
+  document.getElementById('scan-body').innerHTML='<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i><br><small class="text-muted mt-2 d-block">Memuat data aset…</small></div>';
+  api(action,{id:_SCAN_ID}).then(data=>{
+    SCAN_DATA=data;
+    renderScanPage(data);
+  }).catch(e=>{
+    console.error('loadScanData error:', e);
+    document.getElementById('scan-body').innerHTML='<div class="alert alert-danger m-4">Gagal memuat data: '+e.message+'<br><small>'+e.stack+'</small></div>';
+  });
+}
+
+// ================================================================
+//  QR SCAN — EQUIPMENT (Form Inspeksi)
+// ================================================================
+function renderScanPageEquip(data){
+  const body=document.getElementById('scan-body');
+  if(!data||data._notFound){
+    body.innerHTML=`<div class="scan-card" style="margin-top:20px;text-align:center">
+      <i class="fas fa-exclamation-triangle fa-3x" style="color:var(--red);margin-bottom:16px;display:block"></i>
+      <h4 style="color:var(--red)">Peralatan Tidak Ditemukan</h4>
+      <p style="color:#6c757d">ID: ${data?._id||'?'}</p>
+      <p>QR code tidak valid atau peralatan telah dihapus.</p></div>`;
+    return;
+  }
+  const now=new Date(),exp=data.Tgl_Expired?new Date(data.Tgl_Expired):null;
+  const ms=exp?exp-now:Infinity;
+  const sCls=ms<0?'status-exp':ms<30*86400000?'status-near':'status-ok';
+  const sTxt=ms<0?'⚠️ KEDALUWARSA':ms<30*86400000?'⏰ Segera Expired':'✅ Aktif';
+
+  let lastHtml='';
+  if(data._lastInspeksi){
+    const li=data._lastInspeksi;
+    const lc=li.Status_Akhir==='LULUS'?'status-ok':li.Status_Akhir==='PERLU PERBAIKAN'?'status-near':'status-exp';
+    const prevCl=(li.Checklist||[]);
+    const okCnt=prevCl.filter(i=>i.nilai==='OK').length;
+    const ngCnt=prevCl.filter(i=>i.nilai==='NG').length;
+    lastHtml=`<div class="last-insp-box">
+      <b>📋 Inspeksi Terakhir</b><br>
+      <span>Tanggal: ${fd(li.Tgl_Inspeksi)} | Inspektor: ${li.Inspektor}</span><br>
+      <span>Hasil: <span class="status-chip ${lc}" style="padding:2px 8px;font-size:.72rem">${li.Status_Akhir}</span>
+      &nbsp;|&nbsp; <span class="prev-ok">✅ ${okCnt} OK</span> &nbsp;
+      <span class="prev-ng">❌ ${ngCnt} NG</span></span>
+    </div>`;
+  }
+
+  const cl=data._checklistDef||[];
+  window._scanCk=cl.map(item=>({id:item.id,label:item.label,nilai:'OK',catatan:''}));
+  const clHtml=cl.map((item,idx)=>`
+    <div class="ck-scan ck-ok" id="cks-${idx}">
+      <div class="ck-scan-label"><b>${idx+1}.</b> ${item.label}</div>
+      <div class="ck-btn-row">
+        <div class="ck-btn sel-ok" id="ckb-ok-${idx}" onclick="setScanCk(${idx},'OK')">✅ OK</div>
+        <div class="ck-btn" id="ckb-ng-${idx}" onclick="setScanCk(${idx},'NG')">❌ NG</div>
+        <div class="ck-btn" id="ckb-na-${idx}" onclick="setScanCk(${idx},'NA')">N/A</div>
+      </div>
+      <input class="ck-note" id="ckn-${idx}" placeholder="Catatan item ini (opsional)..." oninput="window._scanCk[${idx}].catatan=this.value">
+    </div>`).join('');
+
+  const tipeForm=data.Tipe==='Hydrant'?'HYDRANT':'PERALATAN';
+  body.innerHTML=`
+    <div class="scan-card">
+      <div class="id-badge"><i class="fas fa-tools me-1"></i>${data.ID||'?'}</div>
+      <h5><i class="fas fa-info-circle"></i>Identitas Peralatan</h5>
+      <div class="info-row"><span class="info-label">Jenis / Tipe</span><span class="info-val">${data.Tipe||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Nama Peralatan</span><span class="info-val">${data.Nama||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Lokasi</span><span class="info-val">${data.Lokasi_Label||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Tgl Pemasangan</span><span class="info-val">${fd(data.Tgl_Pasang)}</span></div>
+      ${data.Tgl_Expired?`<div class="info-row"><span class="info-label">Tgl Expired</span><span class="info-val">${fd(data.Tgl_Expired)}</span></div>`:''}
+      <div class="info-row"><span class="info-label">Status</span><span class="info-val"><span class="status-chip ${sCls}">${sTxt}</span></span></div>
+      ${data.Catatan?`<div class="info-row"><span class="info-label">Catatan</span><span class="info-val" style="color:#6c757d;font-size:.82rem">${data.Catatan}</span></div>`:''}
+    </div>
+
+    <div class="scan-card">
+      <h5><i class="fas fa-clipboard-check"></i>Form Inspeksi Rutin — ${data.Tipe||'Peralatan'}</h5>
+      ${lastHtml}
+      <div class="row g-2 mb-3">
+        <div class="col-8">
+          <label class="form-label">Nama Inspektor *</label>
+          <input type="text" class="form-control" id="scan-inspektor" placeholder="Nama lengkap Anda" style="font-size:.9rem;">
+        </div>
+        <div class="col-4">
+          <label class="form-label">Tanggal</label>
+          <input type="date" class="form-control" id="scan-tgl" value="${todayISO()}" style="font-size:.9rem;">
+        </div>
+      </div>
+      <div class="alert alert-light py-2 mb-3" style="font-size:.8rem;border:1px solid #dee2e6;">
+        <b>Petunjuk:</b> Ketuk <span style="background:#28a745;color:#fff;padding:1px 7px;border-radius:4px;font-size:.75rem">✅ OK</span> jika kondisi baik,
+        <span style="background:#dc3545;color:#fff;padding:1px 7px;border-radius:4px;font-size:.75rem">❌ NG</span> jika ada masalah.
+      </div>
+      <div id="scan-cl">${clHtml}</div>
+      <div id="scan-ng-summary" style="display:none;" class="alert alert-warning py-2 mb-3"></div>
+      <div class="mb-4">
+        <label class="form-label">Catatan Umum / Temuan</label>
+        <textarea class="form-control" id="scan-catatan" rows="3" placeholder="Temuan, rekomendasi, tindak lanjut..." style="font-size:.86rem;"></textarea>
+      </div>
+      <button class="btn btn-navy w-100 py-3" id="scan-submit"
+        style="font-size:1rem;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.5px;"
+        onclick="submitScan('${data.ID}','${(data.Nama||'').replace(/'/g,"\\'")}','${(data.Lokasi_Label||'').replace(/'/g,"\\'")}','${tipeForm}')">
+        <i class="fas fa-paper-plane me-2"></i>KIRIM HASIL INSPEKSI
+      </button>
+    </div>`;
+}
+
+// ================================================================
+//  QR SCAN — KOTAK P3K (Catat Pemakaian oleh Karyawan)
+// ================================================================
+function renderScanPageP3k(data){
+  const body=document.getElementById('scan-body');
+  if(!data||data._notFound){
+    body.innerHTML=`<div class="scan-card" style="margin-top:20px;text-align:center">
+      <i class="fas fa-exclamation-triangle fa-3x" style="color:var(--red);margin-bottom:16px;display:block"></i>
+      <h4 style="color:var(--red)">Kotak P3K Tidak Ditemukan</h4>
+      <p style="color:#6c757d">ID: ${data?._id||'?'}</p></div>`;
+    return;
+  }
+
+  const items=data._items||[];
+  const itemsHtml=items.length===0
+    ?'<div class="alert alert-info py-2">Belum ada item dalam kotak P3K ini.</div>'
+    :items.map((item,idx)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f3f7;">
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:.88rem">${item.Nama_Item||'—'}</div>
+          <div style="font-size:.75rem;color:#adb5bd">
+            Stok: <b style="color:${(item.Stok_Saat_Ini||0)>0?'#28a745':'#dc3545'}">${item.Stok_Saat_Ini||0}</b> ${item.Satuan||''}
+            ${item.Tgl_Expired?` | Exp: ${fd(item.Tgl_Expired)}`:''}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="p3kQty(${idx},-1)" style="font-size:1.1rem;line-height:1;padding-top:1px">−</button>
+          <input type="number" id="p3k-qty-${idx}" value="0" min="0" max="${item.Stok_Saat_Ini||0}"
+            data-item-id="${item.ID||''}"
+            data-item-nama="${(item.Nama_Item||'').replace(/"/g,'&quot;')}"
+            data-satuan="${item.Satuan||''}"
+            data-p3kid="${data.ID||''}"
+            data-lok="${(data.Lokasi_Label||'').replace(/"/g,'&quot;')}"
+            style="width:50px;text-align:center;border:1px solid #dee2e6;border-radius:6px;padding:4px;font-size:.9rem;font-weight:700;">
+          <button class="btn btn-sm btn-outline-secondary px-2" onclick="p3kQty(${idx},1)" style="font-size:1.1rem;line-height:1;padding-top:1px">+</button>
+        </div>
+      </div>`).join('');
+
+  body.innerHTML=`
+    <div class="scan-card">
+      <div class="id-badge"><i class="fas fa-kit-medical me-1"></i>${data.ID||'?'}</div>
+      <h5><i class="fas fa-box-open"></i>Kotak P3K — ${data.Lokasi_Label||'—'}</h5>
+      <div class="info-row"><span class="info-label">Lokasi</span><span class="info-val">${data.Lokasi_Label||'—'}</span></div>
+      <div class="info-row"><span class="info-label">Jumlah Jenis Item</span><span class="info-val">${items.length} jenis</span></div>
+    </div>
+
+    <div class="scan-card">
+      <h5><i class="fas fa-hand-holding-medical"></i>Catat Penggunaan P3K</h5>
+      <div class="alert alert-info py-2 mb-3" style="font-size:.82rem;">
+        <i class="fas fa-info-circle me-2"></i>
+        Tekan <b>+</b> pada item yang digunakan, isi nama Anda, lalu tekan <b>CATAT PENGGUNAAN</b>.
+        Stok akan otomatis dikurangi.
+      </div>
+
+      <div id="p3k-items-list">${itemsHtml}</div>
+
+      <div class="mt-3 pt-2">
+        <label class="form-label">Nama Pemakai *</label>
+        <input type="text" class="form-control mb-2" id="p3k-pemakai"
+          placeholder="Nama lengkap Anda" style="font-size:.9rem;">
+        <label class="form-label">Keperluan / Keterangan</label>
+        <input type="text" class="form-control" id="p3k-keperluan"
+          placeholder="Contoh: Luka gores, Sakit kepala, Luka bakar..." style="font-size:.9rem;">
+      </div>
+
+      <button class="btn btn-success w-100 py-3 mt-3" id="scan-submit"
+        style="font-size:1rem;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.5px;"
+        onclick="submitP3kUsage('${data.ID}','${(data.Lokasi_Label||'').replace(/'/g,"\\'")}')">
+        <i class="fas fa-check-circle me-2"></i>CATAT PENGGUNAAN P3K
+      </button>
+    </div>`;
+}
+
+/** Tombol +/- jumlah pemakaian item P3K */
+function p3kQty(idx, delta){
+  const inp=document.getElementById('p3k-qty-'+idx);
+  if(!inp)return;
+  const max=parseInt(inp.max)||999;
+  inp.value=Math.max(0,Math.min(max,parseInt(inp.value||0)+delta));
+}
+
+/** Submit pemakaian P3K dari QR scan — tanpa login */
+function submitP3kUsage(p3kId, lokasiLabel){
+  const pemakai=document.getElementById('p3k-pemakai').value.trim();
+  const keperluan=document.getElementById('p3k-keperluan').value.trim();
+  if(!pemakai){
+    document.getElementById('p3k-pemakai').style.borderColor='red';
+    document.getElementById('p3k-pemakai').placeholder='⚠️ Nama pemakai wajib diisi!';
+    document.getElementById('p3k-pemakai').focus();
+    return;
+  }
+  const usedItems=[];
+  document.querySelectorAll('[id^="p3k-qty-"]').forEach(inp=>{
+    const qty=parseInt(inp.value)||0;
+    if(qty>0){
+      usedItems.push({
+        P3K_ID:   inp.dataset.p3kid,
+        Item_ID:  inp.dataset.itemId,
+        Nama_Item:inp.dataset.itemNama,
+        Lokasi_Label:inp.dataset.lok,
+        Satuan:   inp.dataset.satuan,
+        Jumlah:   qty,
+        Tgl_Pemakaian: todayISO(),
+        Keterangan: keperluan,
+        NamaPemakai: pemakai
+      });
+    }
+  });
+  if(usedItems.length===0){
+    alert('Pilih minimal 1 item yang digunakan.\nTekan tombol + untuk menambah jumlah pemakaian.');
+    return;
+  }
+  const btn=document.getElementById('scan-submit');
+  btn.disabled=true;
+  btn.innerHTML='<i class="fas fa-spinner fa-spin me-2"></i>Mencatat...';
+
+  api('recordPemakaianScan',{NamaPemakai:pemakai,items:usedItems}).then(res=>{
+    if(res.ok){
+      const itemList=usedItems.map(i=>`<li>${i.Nama_Item} — ${i.Jumlah} ${i.Satuan||''}</li>`).join('');
+      document.getElementById('scan-body').innerHTML=`
+        <div class="scan-card" style="margin-top:20px">
+          <div class="scan-result">
+            <span class="result-icon"><i class="fas fa-check-circle" style="color:#28a745"></i></span>
+            <h4 style="color:#28a745">Penggunaan Tercatat!</h4>
+            <p style="color:#6c757d;margin-bottom:16px">Penggunaan P3K berhasil dicatat dalam sistem HSE</p>
+            <div class="summary-box">
+              <div class="info-row"><span class="info-label">Lokasi P3K</span><span class="info-val">${lokasiLabel}</span></div>
+              <div class="info-row"><span class="info-label">Nama Pemakai</span><span class="info-val">${pemakai}</span></div>
+              <div class="info-row"><span class="info-label">Keperluan</span><span class="info-val">${keperluan||'—'}</span></div>
+              <div class="info-row" style="border:none"><span class="info-label">Item digunakan</span>
+                <span class="info-val"><ul style="margin:0;padding-left:16px;font-size:.85rem">${itemList}</ul></span>
+              </div>
+            </div>
+            <button class="btn btn-success mt-3 w-100" onclick="location.reload()">
+              <i class="fas fa-redo me-2"></i>Catat Penggunaan Lain
+            </button>
+          </div>
+        </div>`;
+    }else{
+      btn.disabled=false;
+      btn.innerHTML='<i class="fas fa-check-circle me-2"></i>CATAT PENGGUNAAN P3K';
+      alert('Gagal mencatat: '+(res.msg||'Error tidak diketahui'));
+    }
+  }).catch(e=>{
+    btn.disabled=false;
+    btn.innerHTML='<i class="fas fa-check-circle me-2"></i>CATAT PENGGUNAAN P3K';
+    alert('Error: '+e.message);
+  });
+}
+
+// ================================================================
+//  SERVICE WORKER — registrasi kontrol cache nyata (client-side)
+// ================================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then((reg) => { console.log('Service Worker terdaftar:', reg.scope); })
+      .catch((err) => { console.warn('Service Worker gagal didaftarkan:', err); });
+  });
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "HSE Monitor",
+  "short_name": "HSE Monitor",
+  "description": "Sistem Monitoring HSE - APAR, Peralatan, P3K, dan Inspeksi",
+  "start_url": "./Index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f2840",
+  "theme_color": "#1a3a5c",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
